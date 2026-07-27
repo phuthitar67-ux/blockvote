@@ -21,6 +21,7 @@ import {
   VOTE_TYPE,
 } from "@/lib/web3/config";
 import { normalizeProposal } from "@/lib/web3/format";
+import { describeTxError } from "@/lib/web3/errors";
 
 const GovernanceContext = createContext(null);
 
@@ -250,30 +251,78 @@ export function GovernanceProvider({ children }) {
 
   const claimTokens = useCallback(async () => {
     const { govToken } = await getSignerContracts();
-    const tx = await govToken.claim();
-    await tx.wait();
-    await refreshBalance();
-  }, [getSignerContracts, refreshBalance]);
+    const network = await govToken.runner.provider.getNetwork();
+    console.log("[BlockVote] claimTokens() -> GovToken.claim()", {
+      wallet: address,
+      chainId: Number(network.chainId),
+      contract: GOV_TOKEN_ADDRESS,
+      args: [],
+      tokenBalance,
+      hasClaimed,
+    });
+    try {
+      const tx = await govToken.claim();
+      console.log("[BlockVote] claimTokens() tx sent:", tx.hash);
+      const receipt = await tx.wait();
+      console.log("[BlockVote] claimTokens() confirmed:", receipt.hash, "status:", receipt.status);
+      await refreshBalance();
+    } catch (err) {
+      console.error("[BlockVote] claimTokens() reverted:", describeTxError(err), err);
+      throw err;
+    }
+  }, [getSignerContracts, refreshBalance, address, tokenBalance, hasClaimed]);
 
   const createProposal = useCallback(
     async (title, description, category, votingPeriodSeconds) => {
       const { governance } = await getSignerContracts();
-      const tx = await governance.createProposal(title, description, category, votingPeriodSeconds);
-      const receipt = await tx.wait();
-      await refreshProposals();
-      return receipt.hash;
+      const network = await governance.runner.provider.getNetwork();
+      console.log("[BlockVote] createProposal() -> Governance.createProposal()", {
+        wallet: address,
+        chainId: Number(network.chainId),
+        contract: GOVERNANCE_ADDRESS,
+        args: [title, description, category, votingPeriodSeconds],
+        tokenBalance,
+        proposalThreshold,
+      });
+      try {
+        const tx = await governance.createProposal(title, description, category, votingPeriodSeconds);
+        console.log("[BlockVote] createProposal() tx sent:", tx.hash);
+        const receipt = await tx.wait();
+        console.log("[BlockVote] createProposal() confirmed:", receipt.hash, "status:", receipt.status);
+        await refreshProposals();
+        return receipt.hash;
+      } catch (err) {
+        console.error("[BlockVote] createProposal() reverted:", describeTxError(err), err);
+        throw err;
+      }
     },
-    [getSignerContracts, refreshProposals]
+    [getSignerContracts, refreshProposals, address, tokenBalance, proposalThreshold]
   );
 
   const castVote = useCallback(
     async (id, support) => {
       const { governance } = await getSignerContracts();
-      const tx = await governance.castVote(id, support);
-      await tx.wait();
-      await Promise.all([refreshProposals(), refreshBalance()]);
+      const network = await governance.runner.provider.getNetwork();
+      console.log("[BlockVote] castVote() -> Governance.castVote()", {
+        wallet: address,
+        chainId: Number(network.chainId),
+        contract: GOVERNANCE_ADDRESS,
+        args: [id, support],
+        tokenBalance,
+        alreadyVoted: myVotes[id],
+      });
+      try {
+        const tx = await governance.castVote(id, support);
+        console.log("[BlockVote] castVote() tx sent:", tx.hash);
+        const receipt = await tx.wait();
+        console.log("[BlockVote] castVote() confirmed:", receipt.hash, "status:", receipt.status);
+        await Promise.all([refreshProposals(), refreshBalance()]);
+      } catch (err) {
+        console.error("[BlockVote] castVote() reverted:", describeTxError(err), err);
+        throw err;
+      }
     },
-    [getSignerContracts, refreshProposals, refreshBalance]
+    [getSignerContracts, refreshProposals, refreshBalance, address, tokenBalance, myVotes]
   );
 
   const getCreationTxHash = useCallback(async (id) => {
