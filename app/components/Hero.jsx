@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { useWallet } from "@/lib/WalletContext";
+import { useGovernance } from "@/lib/GovernanceContext";
 
 function shortenAddress(addr) {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
@@ -10,6 +11,7 @@ function shortenAddress(addr) {
 
 export default function Hero() {
     const { address, isConnecting, connect } = useWallet();
+    const { platformStats } = useGovernance();
 
     return (
         <section className="relative overflow-hidden bg-[#060816]">
@@ -51,7 +53,7 @@ export default function Hero() {
 
                             <span className="text-xs font-medium tracking-[0.15em] uppercase text-blue-300">
 
-                                Mainnet Live • 38 Active Proposals
+                                Active Proposals : {platformStats.activeProposals}
 
                             </span>
 
