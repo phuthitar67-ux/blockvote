@@ -1,7 +1,7 @@
 {
-  "network": null,
-  "chainId": null,
-  "govToken": "",
-  "governance": "",
+  "network": "sepolia",
+  "chainId": 11155111,
+  "govToken": "0x0a765f445883eff6c01ba9525577f0017242997f",
+  "governance": "0xff63F149F363df740cb30988C8baa43e2ab4a9c1",
   "deployedAt": null
 }
