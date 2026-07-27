@@ -11,6 +11,7 @@ import {
 import { BrowserProvider, Contract, JsonRpcProvider, formatEther } from "ethers";
 import { useWallet } from "@/lib/WalletContext";
 import {
+  CHAIN_ID,
   GOV_TOKEN_ABI,
   GOV_TOKEN_ADDRESS,
   GOVERNANCE_ABI,
@@ -37,6 +38,8 @@ export function GovernanceProvider({ children }) {
   const [totalVoters, setTotalVoters] = useState(0);
   const [topVoters, setTopVoters] = useState([]);
   const [myVotingHistory, setMyVotingHistory] = useState([]);
+  const [proposalThreshold, setProposalThreshold] = useState(null);
+  const [faucetAmount, setFaucetAmount] = useState(null);
 
   const readGovToken = useMemo(
     () => new Contract(GOV_TOKEN_ADDRESS, GOV_TOKEN_ABI, readProvider),
@@ -55,6 +58,23 @@ export function GovernanceProvider({ children }) {
       throw new Error("ไม่พบ MetaMask กรุณาติดตั้งส่วนขยายก่อน");
     }
     const provider = new BrowserProvider(window.ethereum);
+
+    // Reads always go through readProvider (fixed to NEXT_PUBLIC_RPC_URL), but
+    // writes go through whatever network the wallet is currently on. Without
+    // this check, a wallet on the wrong network can still send a transaction
+    // (to an unrelated/nonexistent contract there) that appears to succeed in
+    // MetaMask, while every subsequent read still hits the correct network
+    // and never reflects it — the wrong-network case must be caught here,
+    // before a signer/tx is created, not after.
+    const network = await provider.getNetwork();
+    if (Number(network.chainId) !== CHAIN_ID) {
+      const err = new Error(
+        `กระเป๋าของคุณเชื่อมต่ออยู่กับเครือข่ายผิด (Chain ID ${network.chainId}) กรุณาสลับไปที่ Sepolia (Chain ID ${CHAIN_ID}) ก่อนทำรายการ`
+      );
+      err.code = "WRONG_NETWORK";
+      throw err;
+    }
+
     const signer = await provider.getSigner();
     return {
       govToken: new Contract(GOV_TOKEN_ADDRESS, GOV_TOKEN_ABI, signer),
@@ -118,12 +138,38 @@ export function GovernanceProvider({ children }) {
   );
 
   useEffect(() => {
-    refreshProposals();
+    if (!IS_CONFIGURED) return;
+    readGovernance
+      .PROPOSAL_THRESHOLD()
+      .then((v) => setProposalThreshold(Number(formatEther(v))))
+      .catch(() => setProposalThreshold(null));
+    readGovToken
+      .FAUCET_AMOUNT()
+      .then((v) => setFaucetAmount(Number(formatEther(v))))
+      .catch(() => setFaucetAmount(null));
+  }, [readGovernance, readGovToken]);
+
+  useEffect(() => {
+    refreshProposals().catch((err) => console.error("refreshProposals failed:", err));
   }, [refreshProposals]);
 
   useEffect(() => {
-    refreshBalance();
+    refreshBalance().catch((err) => console.error("refreshBalance failed:", err));
   }, [refreshBalance]);
+
+  useEffect(() => {
+    if (!IS_CONFIGURED) return;
+    readProvider
+      .getNetwork()
+      .then((n) => {
+        if (Number(n.chainId) !== CHAIN_ID) {
+          console.warn(
+            `[BlockVote] NEXT_PUBLIC_RPC_URL points at chain ${n.chainId}, but NEXT_PUBLIC_CHAIN_ID is set to ${CHAIN_ID}. Reads and the deployed contract addresses may be for different networks — check .env.local.`
+          );
+        }
+      })
+      .catch((err) => console.error("Could not verify RPC network:", err));
+  }, []);
 
   useEffect(() => {
     refreshMyVotes(proposals);
@@ -284,7 +330,8 @@ export function GovernanceProvider({ children }) {
     topVoters,
     getCreationTxHash,
     VOTE_TYPE,
-    PROPOSAL_THRESHOLD: 1000,
+    proposalThreshold,
+    faucetAmount,
   };
 
   return <GovernanceContext.Provider value={value}>{children}</GovernanceContext.Provider>;

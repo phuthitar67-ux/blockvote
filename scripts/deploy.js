@@ -40,6 +40,12 @@ async function main() {
   console.log("\nAdd these to .env.local:");
   console.log(`NEXT_PUBLIC_GOV_TOKEN_ADDRESS=${govTokenAddress}`);
   console.log(`NEXT_PUBLIC_GOVERNANCE_ADDRESS=${governanceAddress}`);
+
+  if (network.name === "sepolia") {
+    console.log("\nOptional — verify source on Sepolia Etherscan (requires ETHERSCAN_API_KEY in .env):");
+    console.log(`npx hardhat verify --network sepolia ${govTokenAddress}`);
+    console.log(`npx hardhat verify --network sepolia ${governanceAddress} ${govTokenAddress}`);
+  }
 }
 
 main().catch((error) => {

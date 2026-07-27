@@ -48,6 +48,7 @@ export default function DashboardPage() {
   const recentProposals = proposals.slice(0, 5);
   const categoryBreakdown = groupByCategory(proposals);
   const monthlyVotingActivity = monthlyActivityFrom(myVotingHistory);
+  const lastUpdated = proposals.length > 0 ? proposals[0].createdAt : null;
 
   const stats = [
     {
@@ -99,7 +100,7 @@ export default function DashboardPage() {
                 <span className="font-mono text-slate-300">
                   {shortenAddress(displayAddress)}
                 </span>{" "}
-                — อัปเดตล่าสุด 27 กรกฎาคม 2026
+                — {lastUpdated ? `อัปเดตล่าสุด ${lastUpdated}` : "อัปเดตล่าสุด"}
               </p>
             </div>
 

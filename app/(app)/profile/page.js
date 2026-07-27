@@ -16,6 +16,7 @@ import AmbientBackground from "@/app/components/AmbientBackground";
 import { useWallet } from "@/lib/WalletContext";
 import { useGovernance } from "@/lib/GovernanceContext";
 import { getYesPercent } from "@/lib/web3/format";
+import { describeTxError } from "@/lib/web3/errors";
 import { statusLabels } from "@/lib/uiConstants";
 
 const TABS = [
@@ -45,12 +46,21 @@ function shortenHash(hash) {
 
 export default function ProfilePage() {
   const { address } = useWallet();
-  const { proposals, tokenBalance, votingPowerPct, myVotingHistory, myCreatedProposals, claimTokens, hasClaimed } =
-    useGovernance();
+  const {
+    proposals,
+    tokenBalance,
+    votingPowerPct,
+    myVotingHistory,
+    myCreatedProposals,
+    claimTokens,
+    hasClaimed,
+    faucetAmount,
+  } = useGovernance();
   const [tab, setTab] = useState("history");
   const [isClaiming, setIsClaiming] = useState(false);
   const [claimError, setClaimError] = useState(null);
 
+  const faucetAmountText = faucetAmount !== null ? faucetAmount.toLocaleString() : "--";
   const displayAddress = address ?? "ยังไม่ได้เชื่อมต่อกระเป๋า";
   const myProposals = myCreatedProposals;
   const participationPct =
@@ -62,7 +72,7 @@ export default function ProfilePage() {
     try {
       await claimTokens();
     } catch (err) {
-      setClaimError(err?.shortMessage || err?.message || "ไม่สามารถรับโทเคนได้ กรุณาลองใหม่อีกครั้ง");
+      setClaimError(describeTxError(err));
     } finally {
       setIsClaiming(false);
     }
@@ -136,7 +146,7 @@ export default function ProfilePage() {
             {address && !hasClaimed && (
               <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-white/5 pt-6">
                 <p className="text-xs text-slate-400">
-                  รับ Governance Token เริ่มต้น 5,000 GOV เพื่อเริ่มโหวตหรือสร้างข้อเสนอ (รับได้ครั้งเดียวต่อกระเป๋า)
+                  รับ Governance Token เริ่มต้น {faucetAmountText} GOV เพื่อเริ่มโหวตหรือสร้างข้อเสนอ (รับได้ครั้งเดียวต่อกระเป๋า)
                 </p>
                 <button
                   type="button"
@@ -144,7 +154,7 @@ export default function ProfilePage() {
                   disabled={isClaiming}
                   className="primary-btn text-xs disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {isClaiming ? "กำลังรับโทเคน..." : "Claim 5,000 GOV"}
+                  {isClaiming ? "กำลังรับโทเคน..." : `Claim ${faucetAmountText} GOV`}
                 </button>
               </div>
             )}

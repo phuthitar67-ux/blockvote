@@ -17,6 +17,7 @@ import {
 import AmbientBackground from "@/app/components/AmbientBackground";
 import { useWallet } from "@/lib/WalletContext";
 import { useGovernance } from "@/lib/GovernanceContext";
+import { describeTxError } from "@/lib/web3/errors";
 import { statusLabels } from "@/lib/uiConstants";
 
 function shortenAddress(addr) {
@@ -150,7 +151,7 @@ export default function ProposalDetailPage({ params }) {
     try {
       await castVote(proposal.id, VOTE_TYPE[choice]);
     } catch (err) {
-      setVoteError(err?.shortMessage || err?.message || "ไม่สามารถส่งคะแนนโหวตได้ กรุณาลองใหม่อีกครั้ง");
+      setVoteError(describeTxError(err));
     } finally {
       setIsVoting(false);
     }

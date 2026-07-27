@@ -14,6 +14,7 @@ import AmbientBackground from "@/app/components/AmbientBackground";
 import { useWallet } from "@/lib/WalletContext";
 import { useGovernance } from "@/lib/GovernanceContext";
 import { getVoteTotal } from "@/lib/web3/format";
+import { describeTxError } from "@/lib/web3/errors";
 import { categories, statusLabels } from "@/lib/uiConstants";
 
 const VOTING_PERIODS = [
@@ -30,8 +31,9 @@ function shortenAddress(addr) {
 
 export default function CreateProposalPage() {
   const { address, connect } = useWallet();
-  const { tokenBalance, proposals, myCreatedProposals, createProposal, PROPOSAL_THRESHOLD } =
+  const { tokenBalance, proposals, myCreatedProposals, createProposal, proposalThreshold } =
     useGovernance();
+  const proposalThresholdText = proposalThreshold !== null ? proposalThreshold.toLocaleString() : "--";
 
   const [form, setForm] = useState({
     title: "",
@@ -96,7 +98,7 @@ export default function CreateProposalPage() {
       });
       setErrors({});
     } catch (err) {
-      setSubmitError(err?.shortMessage || err?.message || "ไม่สามารถส่งข้อเสนอได้ กรุณาลองใหม่อีกครั้ง");
+      setSubmitError(describeTxError(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -123,8 +125,8 @@ export default function CreateProposalPage() {
   const requirements = [
     {
       label: "Min GOV balance",
-      ok: tokenBalance >= PROPOSAL_THRESHOLD,
-      value: `${tokenBalance.toLocaleString()} / ${PROPOSAL_THRESHOLD.toLocaleString()}`,
+      ok: proposalThreshold !== null && tokenBalance >= proposalThreshold,
+      value: `${tokenBalance.toLocaleString()} / ${proposalThresholdText}`,
     },
     { label: "Wallet connected", ok: !!address, value: address ? "Yes" : "No" },
   ];
@@ -143,7 +145,7 @@ export default function CreateProposalPage() {
                 Create Proposal
               </h1>
               <p className="mt-1 text-sm text-slate-400">
-                ข้อเสนอต้องมี Governance Token ขั้นต่ำ {PROPOSAL_THRESHOLD.toLocaleString()} GOV ในการยื่น
+                ข้อเสนอต้องมี Governance Token ขั้นต่ำ {proposalThresholdText} GOV ในการยื่น
               </p>
             </div>
           </div>

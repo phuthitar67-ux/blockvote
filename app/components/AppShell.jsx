@@ -6,10 +6,12 @@ import Link from "next/link";
 import { Menu, AlertTriangle } from "lucide-react";
 import Sidebar from "./Sidebar";
 import { useGovernance } from "@/lib/GovernanceContext";
+import { useWallet } from "@/lib/WalletContext";
 
 export default function AppShell({ children }) {
   const pathname = usePathname();
   const { isConfigured } = useGovernance();
+  const { isWrongNetwork, switchNetwork } = useWallet();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -48,11 +50,27 @@ export default function AppShell({ children }) {
           </button>
         </div>
 
-        {!isConfigured && (
+        {!isConfigured ? (
           <div className="flex items-center gap-2 border-b border-amber-500/20 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-300 sm:px-6">
             <AlertTriangle size={14} className="shrink-0" />
             ยังไม่ได้ตั้งค่า Smart Contract — deploy แล้วใส่ address ใน .env.local (ดู .env.example)
           </div>
+        ) : (
+          isWrongNetwork && (
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/20 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-300 sm:px-6">
+              <span className="flex items-center gap-2">
+                <AlertTriangle size={14} className="shrink-0" />
+                กระเป๋าของคุณเชื่อมต่ออยู่ที่เครือข่ายผิด กรุณาสลับไปที่ Sepolia
+              </span>
+              <button
+                type="button"
+                onClick={switchNetwork}
+                className="rounded-lg border border-amber-400/40 px-3 py-1 font-medium text-amber-200 transition-colors hover:bg-amber-500/20"
+              >
+                สลับเครือข่าย
+              </button>
+            </div>
+          )
         )}
 
         {children}

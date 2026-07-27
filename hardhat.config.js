@@ -2,7 +2,8 @@ require("@nomicfoundation/hardhat-toolbox");
 require("dotenv").config();
 
 const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL || "";
-const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "";
+const PRIVATE_KEY = process.env.PRIVATE_KEY || "";
+const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
 
 /** @type {import("hardhat/config").HardhatUserConfig} */
 module.exports = {
@@ -13,11 +14,16 @@ module.exports = {
     },
   },
   networks: {
+    // In-memory network used by `npx hardhat test` / `npx hardhat node` —
+    // not connected to any real chain, safe to keep alongside sepolia below.
     hardhat: {},
     sepolia: {
       url: SEPOLIA_RPC_URL,
-      accounts: DEPLOYER_PRIVATE_KEY ? [DEPLOYER_PRIVATE_KEY] : [],
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
       chainId: 11155111,
     },
+  },
+  etherscan: {
+    apiKey: ETHERSCAN_API_KEY,
   },
 };
