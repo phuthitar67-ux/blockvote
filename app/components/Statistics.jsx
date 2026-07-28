@@ -4,7 +4,7 @@ import { useGovernance } from "@/lib/GovernanceContext";
 import { formatCompact } from "@/lib/web3/format";
 
 export default function Statistics() {
-  const { platformStats } = useGovernance();
+  const { platformStats, myVotingHistory } = useGovernance();
 
   const stats = [
     {
@@ -21,8 +21,8 @@ export default function Statistics() {
     },
     {
       icon: "◌",
-      value: platformStats.totalVoters.toLocaleString(),
-      label: "ผู้ลงคะแนน",
+      value: myVotingHistory.length.toLocaleString(),
+      label: "จำนวนครั้งที่ฉันโหวต",
       color: "text-violet-400",
     },
     {

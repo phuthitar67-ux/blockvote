@@ -74,12 +74,13 @@ function VoteButton({ label, icon: Icon, active, disabled, onClick, color }) {
 }
 
 function ResultBar({ label, count, percent, color, textColor }) {
+  const displayPercent = Number.isInteger(percent) ? percent : percent.toFixed(1);
   return (
     <div>
       <div className="mb-2 flex items-center justify-between text-sm">
         <span className={`font-medium ${textColor}`}>{label}</span>
         <span className="text-slate-400">
-          {count.toLocaleString()} Votes ({percent}%)
+          {count.toLocaleString()} Votes ({displayPercent}%)
         </span>
       </div>
       <div className="h-2.5 overflow-hidden rounded-full bg-white/10">
@@ -134,7 +135,7 @@ export default function ProposalDetailPage({ params }) {
 
   const votes = { yes: proposal.votesYes, no: proposal.votesNo, abstain: proposal.votesAbstain };
   const total = votes.yes + votes.no + votes.abstain;
-  const pct = (n) => (total === 0 ? 0 : Math.round((n / total) * 100));
+  const pct = (n) => (total === 0 ? 0 : Number(((n / total) * 100).toFixed(1)));
   const status = statusLabels[proposal.status];
 
   const myVoteCode = myVotes[proposal.id] ?? VOTE_TYPE.None;
