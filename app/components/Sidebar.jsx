@@ -10,6 +10,7 @@ import {
   User,
   X,
   Loader2,
+  ShoppingCart,
 } from "lucide-react";
 import { useWallet } from "@/lib/WalletContext";
 import { useGovernance } from "@/lib/GovernanceContext";
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Proposals", href: "/proposals", icon: Vote },
   { label: "Create Proposal", href: "/create-proposal", icon: PlusCircle },
+  { label: "Buy Tokens", href: "/buy-tokens", icon: ShoppingCart },
   { label: "Results", href: "/results", icon: BarChart3 },
   { label: "Profile", href: "/profile", icon: User },
 ];

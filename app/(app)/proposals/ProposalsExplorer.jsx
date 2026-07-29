@@ -1,60 +1,135 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, ArrowRight, CheckCircle2, XCircle, Clock3, ChevronDown } from "lucide-react";
+import {
+  Search,
+  ArrowRight,
+  CheckCircle2,
+  XCircle,
+  Clock3,
+  ChevronDown,
+  StopCircle,
+  Ban,
+  PlusCircle,
+} from "lucide-react";
 import { useGovernance } from "@/lib/GovernanceContext";
-import { getYesPercent } from "@/lib/web3/format";
+import { useWallet } from "@/lib/WalletContext";
+import { getYesPercent, getVoteTotal } from "@/lib/web3/format";
 import { statusLabels, categoryColors } from "@/lib/uiConstants";
 
 const statusIcon = {
   active: Clock3,
   passed: CheckCircle2,
   rejected: XCircle,
+  ended: StopCircle,
+  cancelled: Ban,
 };
 
 const FILTERS = [
   { key: "all", label: "All" },
   { key: "active", label: "Active" },
-  { key: "passed", label: "Passed" },
-  { key: "rejected", label: "Failed" },
+  { key: "ended", label: "Ended" },
+  { key: "cancelled", label: "Cancelled" },
+  { key: "mine", label: "My Proposal" },
 ];
 
 const SORTS = [
   { key: "newest", label: "Newest" },
+  { key: "oldest", label: "Oldest" },
   { key: "most-votes", label: "Most Votes" },
-  { key: "ending-soon", label: "Ending Soon" },
+  { key: "least-votes", label: "Least Votes" },
+  { key: "title-asc", label: "Title A-Z" },
+  { key: "title-desc", label: "Title Z-A" },
 ];
+
+function SkeletonCard() {
+  return (
+    <div className="flex h-full flex-col rounded-[32px] border border-white/10 bg-[#111725] px-8 py-8">
+      <div className="flex items-center justify-between gap-2">
+        <div className="h-5 w-14 animate-pulse rounded-full bg-white/10" />
+        <div className="h-5 w-20 animate-pulse rounded-full bg-white/10" />
+      </div>
+      <div className="mt-6 flex-1 space-y-3">
+        <div className="h-5 w-4/5 animate-pulse rounded-lg bg-white/10" />
+        <div className="h-4 w-full animate-pulse rounded-lg bg-white/10" />
+        <div className="h-4 w-2/3 animate-pulse rounded-lg bg-white/10" />
+      </div>
+      <div className="mt-7 h-2.5 w-full animate-pulse rounded-full bg-white/10" />
+      <div className="mt-7 flex items-center justify-between border-t border-white/5 pt-6">
+        <div className="h-4 w-20 animate-pulse rounded bg-white/10" />
+        <div className="h-4 w-14 animate-pulse rounded bg-white/10" />
+      </div>
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="fade-up flex flex-col items-center justify-center rounded-[32px] border border-white/10 bg-[#111725] py-20 text-center">
+      <span className="text-5xl">📭</span>
+      <p className="mt-4 text-sm text-slate-400">No proposals found.</p>
+      <Link href="/create-proposal" className="primary-btn mt-6 h-11 gap-2 px-6 text-sm">
+        <PlusCircle size={16} />
+        Create Proposal
+      </Link>
+    </div>
+  );
+}
 
 export default function ProposalsExplorer() {
   const { proposals, loadingProposals } = useGovernance();
+  const { address } = useWallet();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("newest");
 
+  const handleQueryChange = useCallback((e) => setQuery(e.target.value), []);
+  const handleSortChange = useCallback((e) => setSort(e.target.value), []);
+  const handleFilterClick = useCallback((key) => setFilter(key), []);
+
   const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+
     let list = proposals.filter((p) => {
-      const matchesFilter = filter === "all" || p.status === filter;
+      const matchesFilter =
+        filter === "all"
+          ? true
+          : filter === "mine"
+            ? !!address && p.creator.toLowerCase() === address.toLowerCase()
+            : p.status === filter;
+
       const matchesQuery =
-        !query.trim() ||
-        p.title.toLowerCase().includes(query.trim().toLowerCase()) ||
-        p.id.includes(query.trim());
+        !q ||
+        String(p.id).includes(q) ||
+        p.title.toLowerCase().includes(q) ||
+        p.description.toLowerCase().includes(q) ||
+        p.creator.toLowerCase().includes(q);
+
       return matchesFilter && matchesQuery;
     });
 
-    if (sort === "most-votes") {
-      list = [...list].sort(
-        (a, b) =>
-          b.votesYes + b.votesNo + b.votesAbstain - (a.votesYes + a.votesNo + a.votesAbstain)
-      );
-    } else if (sort === "ending-soon") {
-      list = [...list].sort((a, b) => new Date(a.votingDeadline) - new Date(b.votingDeadline));
+    // Sort by the raw on-chain startTime (Unix seconds), not createdAt — that
+    // field is truncated to a "YYYY-MM-DD" string for display, so any two
+    // proposals created on the same calendar day would otherwise tie and
+    // fall back to whatever order they happened to already be in.
+    list = [...list];
+    if (sort === "oldest") {
+      list.sort((a, b) => a.startTime - b.startTime);
+    } else if (sort === "most-votes") {
+      list.sort((a, b) => getVoteTotal(b) - getVoteTotal(a));
+    } else if (sort === "least-votes") {
+      list.sort((a, b) => getVoteTotal(a) - getVoteTotal(b));
+    } else if (sort === "title-asc") {
+      list.sort((a, b) => a.title.localeCompare(b.title));
+    } else if (sort === "title-desc") {
+      list.sort((a, b) => b.title.localeCompare(a.title));
     } else {
-      list = [...list].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      list.sort((a, b) => b.startTime - a.startTime);
     }
 
     return list;
-  }, [proposals, query, filter, sort]);
+  }, [proposals, query, filter, sort, address]);
 
   return (
     <>
@@ -67,18 +142,19 @@ export default function ProposalsExplorer() {
           />
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="ค้นหาข้อเสนอ..."
+            onChange={handleQueryChange}
+            placeholder="ค้นหาด้วย ID, ชื่อ, รายละเอียด หรือที่อยู่ผู้สร้าง..."
             className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 outline-none transition-colors focus:border-blue-500/50"
           />
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
+          <div className="flex flex-wrap items-center gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
             {FILTERS.map((f) => (
               <button
                 key={f.key}
-                onClick={() => setFilter(f.key)}
+                type="button"
+                onClick={() => handleFilterClick(f.key)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                   filter === f.key
                     ? "bg-blue-500/20 text-white"
@@ -93,7 +169,7 @@ export default function ProposalsExplorer() {
           <div className="relative">
             <select
               value={sort}
-              onChange={(e) => setSort(e.target.value)}
+              onChange={handleSortChange}
               className="appearance-none rounded-xl border border-white/10 bg-white/5 py-2.5 pl-4 pr-9 text-xs font-medium text-white outline-none transition-colors focus:border-blue-500/50"
             >
               {SORTS.map((s) => (
@@ -111,21 +187,23 @@ export default function ProposalsExplorer() {
       </div>
 
       {loadingProposals ? (
-        <div className="fade-up rounded-[32px] border border-white/10 bg-[#111725] py-16 text-center text-sm text-slate-400">
-          กำลังโหลดข้อเสนอจาก Blockchain...
+        <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }, (_, i) => (
+            <SkeletonCard key={i} />
+          ))}
         </div>
       ) : visible.length === 0 ? (
-        <div className="fade-up rounded-[32px] border border-white/10 bg-[#111725] py-16 text-center text-sm text-slate-400">
-          ไม่พบข้อเสนอที่ตรงกับเงื่อนไข
-        </div>
+        <EmptyState />
       ) : (
         <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-3">
           {visible.map((item, index) => {
             const percent = getYesPercent(item);
-            const totalVotes = item.votesYes + item.votesNo + item.votesAbstain;
+            const totalVotes = getVoteTotal(item);
             const status = statusLabels[item.status];
             const StatusIcon = statusIcon[item.status];
             const categoryColor = categoryColors[item.category] ?? "#94a3b8";
+            const winningSide =
+              item.votesYes === item.votesNo ? "Tie" : item.votesYes > item.votesNo ? "YES" : "NO";
 
             return (
               <div
@@ -181,6 +259,16 @@ export default function ProposalsExplorer() {
                       className="h-full rounded-full bg-gradient-to-r from-blue-500 to-violet-500 transition-all duration-500"
                       style={{ width: `${percent}%` }}
                     />
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between text-[11px] text-slate-400">
+                    <span>
+                      <span className="text-emerald-400">YES</span> {item.votesYes.toLocaleString()} ·{" "}
+                      <span className="text-red-400">NO</span> {item.votesNo.toLocaleString()}
+                    </span>
+                    <span className="font-medium text-slate-300">
+                      Winning: <span className="text-white">{winningSide}</span>
+                    </span>
                   </div>
                 </div>
 

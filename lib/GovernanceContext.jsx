@@ -8,7 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { BrowserProvider, Contract, JsonRpcProvider, formatEther } from "ethers";
+import { BrowserProvider, Contract, JsonRpcProvider, formatEther, parseEther } from "ethers";
 import { useWallet } from "@/lib/WalletContext";
 import {
   CHAIN_ID,
@@ -108,8 +108,12 @@ export function GovernanceProvider({ children }) {
   const [totalVoters, setTotalVoters] = useState(0);
   const [topVoters, setTopVoters] = useState([]);
   const [myVotingHistory, setMyVotingHistory] = useState([]);
+  const [recentActivity, setRecentActivity] = useState([]);
   const [proposalThreshold, setProposalThreshold] = useState(null);
   const [faucetAmount, setFaucetAmount] = useState(null);
+  const [tokenPrice, setTokenPriceValue] = useState(null);
+  const [ethTreasuryBalance, setEthTreasuryBalance] = useState(0);
+  const [ownerAddress, setOwnerAddress] = useState(null);
 
   const readGovToken = useMemo(
     () => new Contract(GOV_TOKEN_ADDRESS, GOV_TOKEN_ABI, readProvider),
@@ -207,6 +211,16 @@ export function GovernanceProvider({ children }) {
     [address, readGovernance]
   );
 
+  const refreshTokenomics = useCallback(async () => {
+    if (!IS_CONFIGURED) return;
+    const [price, treasuryWei] = await Promise.all([
+      readGovToken.tokenPrice(),
+      readProvider.getBalance(GOV_TOKEN_ADDRESS),
+    ]);
+    setTokenPriceValue(price);
+    setEthTreasuryBalance(Number(formatEther(treasuryWei)));
+  }, [readGovToken]);
+
   useEffect(() => {
     if (!IS_CONFIGURED) return;
     readGovernance
@@ -217,7 +231,15 @@ export function GovernanceProvider({ children }) {
       .FAUCET_AMOUNT()
       .then((v) => setFaucetAmount(Number(formatEther(v))))
       .catch(() => setFaucetAmount(null));
+    readGovToken
+      .owner()
+      .then(setOwnerAddress)
+      .catch(() => setOwnerAddress(null));
   }, [readGovernance, readGovToken]);
+
+  useEffect(() => {
+    refreshTokenomics().catch((err) => console.error("refreshTokenomics failed:", err));
+  }, [refreshTokenomics]);
 
   useEffect(() => {
     refreshProposals().catch((err) => console.error("refreshProposals failed:", err));
@@ -333,55 +355,171 @@ export function GovernanceProvider({ children }) {
     if (!IS_CONFIGURED || proposals.length === 0) {
       setTotalVoters(0);
       setTopVoters([]);
+      setRecentActivity([]);
       return;
     }
+
+    // "Created" entries need no event scan at all — startTime/creator are
+    // already part of the proposal data refreshProposals() already fetched.
+    // Show those immediately, then enrich with Vote/Edit/End/Cancel entries
+    // (which do need event logs) in the background, same non-blocking
+    // pattern as myVotingHistory: never make the fast data wait on the slow
+    // scan, update progressively as each proposal's events resolve.
+    //
+    // topVoters/totalVoters and the "vote" activity entries both need the
+    // exact same VoteCast events per proposal — this used to be two separate
+    // effects each scanning VoteCast independently, which doubled RPC load
+    // and (observed under load with 8+ proposals) could starve one of them
+    // into a silent failure via rate-limiting. Scan once here and derive both.
+    const createdEntries = proposals.map((p) => ({
+      id: `created-${p.id}`,
+      type: "created",
+      proposalId: p.id,
+      proposalTitle: p.title,
+      actor: p.creator,
+      timestamp: p.startTime,
+    }));
+    setRecentActivity(createdEntries.sort((a, b) => b.timestamp - a.timestamp).slice(0, 10));
+
+    let cancelled = false;
     (async () => {
       const latestBlock = await readProvider.getBlockNumber();
-      const events = [];
+      const voteLabel = { [VOTE_TYPE.Yes]: "YES", [VOTE_TYPE.No]: "NO", [VOTE_TYPE.Abstain]: "ABSTAIN" };
+      const extra = [];
+      const allVoteEvents = [];
+
       for (const proposal of proposals) {
+        if (cancelled) return;
         const fromBlock = await blockNumberBefore(proposal.startTime, latestBlock);
-        const toBlock = Math.min(await blockNumberBefore(proposal.endTime, latestBlock) + 2, latestBlock);
-        events.push(
-          ...(await queryFilterChunked(
+        const toBlock = Math.min((await blockNumberBefore(proposal.endTime, latestBlock)) + 2, latestBlock);
+
+        const voteEvents = await queryFilterChunked(
+          readGovernance,
+          readGovernance.filters.VoteCast(proposal.id),
+          fromBlock,
+          toBlock
+        );
+        allVoteEvents.push(...voteEvents);
+        for (const event of voteEvents) {
+          const block = await event.getBlock();
+          extra.push({
+            id: `vote-${proposal.id}-${event.transactionHash}`,
+            type: "vote",
+            proposalId: proposal.id,
+            proposalTitle: proposal.title,
+            actor: event.args.voter,
+            detail: voteLabel[Number(event.args.support)] ?? "UNKNOWN",
+            timestamp: Number(block.timestamp),
+          });
+        }
+
+        const updateEvents = await queryFilterChunked(
+          readGovernance,
+          readGovernance.filters.ProposalUpdated(proposal.id),
+          fromBlock,
+          toBlock
+        );
+        for (const event of updateEvents) {
+          const block = await event.getBlock();
+          extra.push({
+            id: `edit-${proposal.id}-${event.transactionHash}`,
+            type: "edit",
+            proposalId: proposal.id,
+            proposalTitle: event.args.title,
+            actor: event.args.creator,
+            timestamp: Number(block.timestamp),
+          });
+        }
+
+        if (proposal.status === "ended") {
+          const endEvents = await queryFilterChunked(
             readGovernance,
-            readGovernance.filters.VoteCast(proposal.id),
+            readGovernance.filters.ProposalEnded(proposal.id),
             fromBlock,
             toBlock
-          ))
-        );
-      }
-      return events;
-    })()
-      .then(async (events) => {
-        const byVoter = new Map();
-        for (const event of events) {
-          const voter = event.args.voter.toLowerCase();
-          byVoter.set(voter, (byVoter.get(voter) ?? 0) + 1);
+          );
+          for (const event of endEvents) {
+            const block = await event.getBlock();
+            extra.push({
+              id: `end-${proposal.id}-${event.transactionHash}`,
+              type: "end",
+              proposalId: proposal.id,
+              proposalTitle: proposal.title,
+              actor: event.args.creator,
+              timestamp: Number(block.timestamp),
+            });
+          }
         }
-        setTotalVoters(byVoter.size);
 
-        const entries = await Promise.all(
-          Array.from(byVoter.entries()).map(async ([voter, votes]) => ({
-            address: voter,
-            votes,
-            power: Number(formatEther(await readGovToken.balanceOf(voter))),
-          }))
-        );
-        entries.sort((a, b) => b.votes - a.votes || b.power - a.power);
-        setTopVoters(
-          entries.slice(0, 5).map((entry, index) => ({
-            rank: index + 1,
-            address: entry.address,
-            votes: entry.votes,
-            power: entry.power,
-            participation: proposals.length > 0 ? Math.round((entry.votes / proposals.length) * 100) : 0,
-          }))
-        );
-      })
-      .catch(() => {
+        if (proposal.status === "cancelled") {
+          const cancelEvents = await queryFilterChunked(
+            readGovernance,
+            readGovernance.filters.ProposalCancelled(proposal.id),
+            fromBlock,
+            toBlock
+          );
+          for (const event of cancelEvents) {
+            const block = await event.getBlock();
+            extra.push({
+              id: `cancel-${proposal.id}-${event.transactionHash}`,
+              type: "cancel",
+              proposalId: proposal.id,
+              proposalTitle: proposal.title,
+              actor: event.args.creator,
+              timestamp: Number(block.timestamp),
+            });
+          }
+        }
+
+        if (!cancelled) {
+          setRecentActivity(
+            [...createdEntries, ...extra].sort((a, b) => b.timestamp - a.timestamp).slice(0, 10)
+          );
+
+          // Recompute after every proposal (not just once at the very end) —
+          // with many proposals this scan can take minutes under a
+          // rate-limited RPC, and totalVoters/topVoters should reflect
+          // whatever has been found so far instead of sitting at their
+          // initial zero/empty value the whole time.
+          const byVoter = new Map();
+          for (const event of allVoteEvents) {
+            const voter = event.args.voter.toLowerCase();
+            byVoter.set(voter, (byVoter.get(voter) ?? 0) + 1);
+          }
+          setTotalVoters(byVoter.size);
+
+          const entries = await Promise.all(
+            Array.from(byVoter.entries()).map(async ([voter, votes]) => ({
+              address: voter,
+              votes,
+              power: Number(formatEther(await readGovToken.balanceOf(voter))),
+            }))
+          );
+          entries.sort((a, b) => b.votes - a.votes || b.power - a.power);
+          if (!cancelled) {
+            setTopVoters(
+              entries.slice(0, 5).map((entry, index) => ({
+                rank: index + 1,
+                address: entry.address,
+                votes: entry.votes,
+                power: entry.power,
+                participation: proposals.length > 0 ? Math.round((entry.votes / proposals.length) * 100) : 0,
+              }))
+            );
+          }
+        }
+      }
+    })().catch((err) => {
+      console.error("[BlockVote] activity/voters scan failed:", err);
+      if (!cancelled) {
         setTotalVoters(0);
         setTopVoters([]);
-      });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [proposals, readGovernance, readGovToken]);
 
   const claimTokens = useCallback(async () => {
@@ -406,6 +544,80 @@ export function GovernanceProvider({ children }) {
       throw err;
     }
   }, [getSignerContracts, refreshBalance, address, tokenBalance, hasClaimed]);
+
+  const buyTokens = useCallback(
+    async (ethAmount) => {
+      const { govToken } = await getSignerContracts();
+      const network = await govToken.runner.provider.getNetwork();
+      const value = parseEther(String(ethAmount));
+      console.log("[BlockVote] buyTokens() -> GovToken.buyTokens()", {
+        wallet: address,
+        chainId: Number(network.chainId),
+        contract: GOV_TOKEN_ADDRESS,
+        ethAmount,
+        valueWei: value.toString(),
+        tokenPrice: tokenPrice?.toString(),
+      });
+      try {
+        const tx = await govToken.buyTokens({ value });
+        console.log("[BlockVote] buyTokens() tx sent:", tx.hash);
+        const receipt = await tx.wait();
+        console.log("[BlockVote] buyTokens() confirmed:", receipt.hash, "status:", receipt.status);
+        await Promise.all([refreshBalance(), refreshTokenomics()]);
+        return receipt.hash;
+      } catch (err) {
+        console.error("[BlockVote] buyTokens() reverted:", describeTxError(err), err);
+        throw err;
+      }
+    },
+    [getSignerContracts, refreshBalance, refreshTokenomics, address, tokenPrice]
+  );
+
+  const setTokenPrice = useCallback(
+    async (newPriceWei) => {
+      const { govToken } = await getSignerContracts();
+      const network = await govToken.runner.provider.getNetwork();
+      console.log("[BlockVote] setTokenPrice() -> GovToken.setTokenPrice()", {
+        wallet: address,
+        chainId: Number(network.chainId),
+        contract: GOV_TOKEN_ADDRESS,
+        newPriceWei: newPriceWei.toString(),
+      });
+      try {
+        const tx = await govToken.setTokenPrice(newPriceWei);
+        console.log("[BlockVote] setTokenPrice() tx sent:", tx.hash);
+        const receipt = await tx.wait();
+        console.log("[BlockVote] setTokenPrice() confirmed:", receipt.hash, "status:", receipt.status);
+        await refreshTokenomics();
+        return receipt.hash;
+      } catch (err) {
+        console.error("[BlockVote] setTokenPrice() reverted:", describeTxError(err), err);
+        throw err;
+      }
+    },
+    [getSignerContracts, refreshTokenomics, address]
+  );
+
+  const withdrawETH = useCallback(async () => {
+    const { govToken } = await getSignerContracts();
+    const network = await govToken.runner.provider.getNetwork();
+    console.log("[BlockVote] withdrawETH() -> GovToken.withdrawETH()", {
+      wallet: address,
+      chainId: Number(network.chainId),
+      contract: GOV_TOKEN_ADDRESS,
+    });
+    try {
+      const tx = await govToken.withdrawETH();
+      console.log("[BlockVote] withdrawETH() tx sent:", tx.hash);
+      const receipt = await tx.wait();
+      console.log("[BlockVote] withdrawETH() confirmed:", receipt.hash, "status:", receipt.status);
+      await refreshTokenomics();
+      return receipt.hash;
+    } catch (err) {
+      console.error("[BlockVote] withdrawETH() reverted:", describeTxError(err), err);
+      throw err;
+    }
+  }, [getSignerContracts, refreshTokenomics, address]);
 
   const createProposal = useCallback(
     async (title, description, category, votingPeriodSeconds) => {
@@ -460,6 +672,81 @@ export function GovernanceProvider({ children }) {
     [getSignerContracts, refreshProposals, refreshBalance, address, tokenBalance, myVotes]
   );
 
+  const endProposal = useCallback(
+    async (id) => {
+      const { governance } = await getSignerContracts();
+      const network = await governance.runner.provider.getNetwork();
+      console.log("[BlockVote] endProposal() -> Governance.endProposal()", {
+        wallet: address,
+        chainId: Number(network.chainId),
+        contract: GOVERNANCE_ADDRESS,
+        args: [id],
+      });
+      try {
+        const tx = await governance.endProposal(id);
+        console.log("[BlockVote] endProposal() tx sent:", tx.hash);
+        const receipt = await tx.wait();
+        console.log("[BlockVote] endProposal() confirmed:", receipt.hash, "status:", receipt.status);
+        await refreshProposals();
+        return receipt.hash;
+      } catch (err) {
+        console.error("[BlockVote] endProposal() reverted:", describeTxError(err), err);
+        throw err;
+      }
+    },
+    [getSignerContracts, refreshProposals, address]
+  );
+
+  const updateProposal = useCallback(
+    async (id, title, description) => {
+      const { governance } = await getSignerContracts();
+      const network = await governance.runner.provider.getNetwork();
+      console.log("[BlockVote] updateProposal() -> Governance.updateProposal()", {
+        wallet: address,
+        chainId: Number(network.chainId),
+        contract: GOVERNANCE_ADDRESS,
+        args: [id, title, description],
+      });
+      try {
+        const tx = await governance.updateProposal(id, title, description);
+        console.log("[BlockVote] updateProposal() tx sent:", tx.hash);
+        const receipt = await tx.wait();
+        console.log("[BlockVote] updateProposal() confirmed:", receipt.hash, "status:", receipt.status);
+        await refreshProposals();
+        return receipt.hash;
+      } catch (err) {
+        console.error("[BlockVote] updateProposal() reverted:", describeTxError(err), err);
+        throw err;
+      }
+    },
+    [getSignerContracts, refreshProposals, address]
+  );
+
+  const cancelProposal = useCallback(
+    async (id) => {
+      const { governance } = await getSignerContracts();
+      const network = await governance.runner.provider.getNetwork();
+      console.log("[BlockVote] cancelProposal() -> Governance.cancelProposal()", {
+        wallet: address,
+        chainId: Number(network.chainId),
+        contract: GOVERNANCE_ADDRESS,
+        args: [id],
+      });
+      try {
+        const tx = await governance.cancelProposal(id);
+        console.log("[BlockVote] cancelProposal() tx sent:", tx.hash);
+        const receipt = await tx.wait();
+        console.log("[BlockVote] cancelProposal() confirmed:", receipt.hash, "status:", receipt.status);
+        await refreshProposals();
+        return receipt.hash;
+      } catch (err) {
+        console.error("[BlockVote] cancelProposal() reverted:", describeTxError(err), err);
+        throw err;
+      }
+    },
+    [getSignerContracts, refreshProposals, address]
+  );
+
   const getCreationTxHash = useCallback(
     async (id) => {
       const proposal = proposals.find((p) => p.id === id);
@@ -486,8 +773,13 @@ export function GovernanceProvider({ children }) {
   );
 
   const votingPowerPct = totalSupply > 0 ? (tokenBalance / totalSupply) * 100 : 0;
+  const isOwner = !!address && !!ownerAddress && address.toLowerCase() === ownerAddress.toLowerCase();
+  const tokenPriceEth = tokenPrice !== null ? Number(formatEther(tokenPrice)) : null;
 
-  const finishedProposals = proposals.filter((p) => p.status !== "active");
+  // Cancelled proposals were withdrawn before any vote could happen, so they
+  // carry no pass/fail signal — excluded from the pass-rate denominator the
+  // same way "active" (not yet decided) proposals already are.
+  const finishedProposals = proposals.filter((p) => p.status !== "active" && p.status !== "cancelled");
   const passedCount = proposals.filter((p) => p.status === "passed").length;
   const passRate =
     finishedProposals.length > 0 ? Math.round((passedCount / finishedProposals.length) * 100 * 10) / 10 : 0;
@@ -523,14 +815,26 @@ export function GovernanceProvider({ children }) {
     claimTokens,
     createProposal,
     castVote,
+    endProposal,
+    updateProposal,
+    cancelProposal,
     myVotes,
     myCreatedProposals,
     myVotingHistory,
+    recentActivity,
     topVoters,
     getCreationTxHash,
     VOTE_TYPE,
     proposalThreshold,
     faucetAmount,
+    tokenPrice,
+    tokenPriceEth,
+    ethTreasuryBalance,
+    ownerAddress,
+    isOwner,
+    buyTokens,
+    setTokenPrice,
+    withdrawETH,
   };
 
   return <GovernanceContext.Provider value={value}>{children}</GovernanceContext.Provider>;

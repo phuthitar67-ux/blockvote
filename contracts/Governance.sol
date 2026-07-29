@@ -20,7 +20,9 @@ contract Governance {
     enum ProposalState {
         Active,
         Passed,
-        Rejected
+        Rejected,
+        Ended,
+        Cancelled
     }
 
     struct Proposal {
@@ -34,6 +36,8 @@ contract Governance {
         uint256 votesYes;
         uint256 votesNo;
         uint256 votesAbstain;
+        bool ended;
+        bool cancelled;
     }
 
     IERC20 public immutable govToken;
@@ -54,6 +58,15 @@ contract Governance {
         uint64 endTime
     );
     event VoteCast(uint256 indexed id, address indexed voter, VoteType support, uint256 weight);
+    event ProposalEnded(uint256 indexed id, address indexed creator);
+    event ProposalUpdated(uint256 indexed id, address indexed creator, string title, string description);
+    event ProposalCancelled(uint256 indexed id, address indexed creator);
+
+    modifier onlyCreator(uint256 id) {
+        require(id < proposalCount, "Governance: no such proposal");
+        require(proposals[id].creator == msg.sender, "Governance: not proposal creator");
+        _;
+    }
 
     constructor(address govTokenAddress) {
         govToken = IERC20(govTokenAddress);
@@ -86,17 +99,18 @@ contract Governance {
             endTime: endTime,
             votesYes: 0,
             votesNo: 0,
-            votesAbstain: 0
+            votesAbstain: 0,
+            ended: false,
+            cancelled: false
         });
 
         emit ProposalCreated(id, msg.sender, title, category, startTime, endTime);
     }
 
     function castVote(uint256 id, VoteType support) external {
-        require(id < proposalCount, "Governance: no such proposal");
         require(support != VoteType.None, "Governance: invalid vote");
+        require(state(id) == ProposalState.Active, "Governance: voting closed");
         Proposal storage p = proposals[id];
-        require(block.timestamp < p.endTime, "Governance: voting closed");
         require(votesCast[id][msg.sender] == VoteType.None, "Governance: already voted");
 
         uint256 weight = govToken.balanceOf(msg.sender);
@@ -115,9 +129,45 @@ contract Governance {
         emit VoteCast(id, msg.sender, support, weight);
     }
 
+    /// @notice Lets a proposal's creator close voting early. Results already
+    /// cast remain visible and final; no further votes are accepted.
+    function endProposal(uint256 id) external onlyCreator(id) {
+        require(state(id) == ProposalState.Active, "Governance: proposal not active");
+        proposals[id].ended = true;
+        emit ProposalEnded(id, msg.sender);
+    }
+
+    /// @notice Lets a proposal's creator edit title/description while it is
+    /// still active and before anyone has voted on it.
+    function updateProposal(uint256 id, string calldata title, string calldata description) external onlyCreator(id) {
+        require(state(id) == ProposalState.Active, "Governance: proposal not active");
+        Proposal storage p = proposals[id];
+        require(p.votesYes == 0 && p.votesNo == 0 && p.votesAbstain == 0, "Governance: proposal already has votes");
+        require(bytes(title).length > 0, "Governance: empty title");
+        p.title = title;
+        p.description = description;
+        emit ProposalUpdated(id, msg.sender, title, description);
+    }
+
+    /// @notice Lets a proposal's creator withdraw it entirely while it is
+    /// still active and before anyone has voted on it.
+    function cancelProposal(uint256 id) external onlyCreator(id) {
+        require(state(id) == ProposalState.Active, "Governance: proposal not active");
+        Proposal storage p = proposals[id];
+        require(p.votesYes == 0 && p.votesNo == 0 && p.votesAbstain == 0, "Governance: proposal already has votes");
+        p.cancelled = true;
+        emit ProposalCancelled(id, msg.sender);
+    }
+
     function state(uint256 id) public view returns (ProposalState) {
         require(id < proposalCount, "Governance: no such proposal");
         Proposal storage p = proposals[id];
+        if (p.cancelled) {
+            return ProposalState.Cancelled;
+        }
+        if (p.ended) {
+            return ProposalState.Ended;
+        }
         if (block.timestamp < p.endTime) {
             return ProposalState.Active;
         }

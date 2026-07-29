@@ -1,6 +1,7 @@
 import "./globals.css";
 import { WalletProvider } from "@/lib/WalletContext";
 import { GovernanceProvider } from "@/lib/GovernanceContext";
+import { ToastProvider } from "@/lib/ToastContext";
 
 export const metadata = {
   title: "ระบบลงคะแนน Blockchain Governance",
@@ -16,7 +17,9 @@ export default function RootLayout({ children }) {
     <html lang="th" suppressHydrationWarning data-scroll-behavior="smooth">
       <body className="bg-[#070B17] text-white antialiased">
         <WalletProvider>
-          <GovernanceProvider>{children}</GovernanceProvider>
+          <GovernanceProvider>
+            <ToastProvider>{children}</ToastProvider>
+          </GovernanceProvider>
         </WalletProvider>
       </body>
     </html>

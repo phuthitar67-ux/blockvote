@@ -2,7 +2,7 @@ const { expect } = require("chai");
 const { ethers, network } = require("hardhat");
 
 const VoteType = { None: 0, Yes: 1, No: 2, Abstain: 3 };
-const ProposalState = { Active: 0, Passed: 1, Rejected: 2 };
+const ProposalState = { Active: 0, Passed: 1, Rejected: 2, Ended: 3, Cancelled: 4 };
 const ONE_HOUR = 60 * 60;
 const ONE_DAY = 24 * ONE_HOUR;
 
@@ -124,6 +124,139 @@ describe("Governance", function () {
       await network.provider.send("evm_mine");
 
       expect(await governance.state(0)).to.equal(ProposalState.Rejected);
+    });
+  });
+
+  describe("endProposal", function () {
+    async function createdProposalFixture() {
+      const ctx = await deployFixture();
+      await ctx.governance.connect(ctx.alice).createProposal("Title", "Desc", "Treasury", ONE_DAY);
+      return ctx;
+    }
+
+    it("lets the creator end an active proposal early", async function () {
+      const { governance, alice } = await createdProposalFixture();
+      await expect(governance.connect(alice).endProposal(0))
+        .to.emit(governance, "ProposalEnded")
+        .withArgs(0, alice.address);
+      expect(await governance.state(0)).to.equal(ProposalState.Ended);
+    });
+
+    it("blocks further votes once ended", async function () {
+      const { governance, alice, bob } = await createdProposalFixture();
+      await governance.connect(alice).endProposal(0);
+      await expect(governance.connect(bob).castVote(0, VoteType.Yes)).to.be.revertedWith(
+        "Governance: voting closed"
+      );
+    });
+
+    it("keeps Ended after a refresh (state persists on-chain)", async function () {
+      const { governance, alice } = await createdProposalFixture();
+      await governance.connect(alice).endProposal(0);
+      expect(await governance.state(0)).to.equal(ProposalState.Ended);
+      expect(await governance.state(0)).to.equal(ProposalState.Ended);
+    });
+
+    it("reverts when called by a non-creator", async function () {
+      const { governance, bob } = await createdProposalFixture();
+      await expect(governance.connect(bob).endProposal(0)).to.be.revertedWith(
+        "Governance: not proposal creator"
+      );
+    });
+
+    it("reverts when the proposal is no longer active", async function () {
+      const { governance, alice } = await createdProposalFixture();
+      await governance.connect(alice).endProposal(0);
+      await expect(governance.connect(alice).endProposal(0)).to.be.revertedWith(
+        "Governance: proposal not active"
+      );
+    });
+  });
+
+  describe("updateProposal", function () {
+    async function createdProposalFixture() {
+      const ctx = await deployFixture();
+      await ctx.governance.connect(ctx.alice).createProposal("Title", "Desc", "Treasury", ONE_DAY);
+      return ctx;
+    }
+
+    it("lets the creator edit title/description before any votes", async function () {
+      const { governance, alice } = await createdProposalFixture();
+      await expect(governance.connect(alice).updateProposal(0, "New Title", "New Desc"))
+        .to.emit(governance, "ProposalUpdated")
+        .withArgs(0, alice.address, "New Title", "New Desc");
+      const proposal = await governance.getProposal(0);
+      expect(proposal.title).to.equal("New Title");
+      expect(proposal.description).to.equal("New Desc");
+    });
+
+    it("reverts when called by a non-creator", async function () {
+      const { governance, bob } = await createdProposalFixture();
+      await expect(
+        governance.connect(bob).updateProposal(0, "New Title", "New Desc")
+      ).to.be.revertedWith("Governance: not proposal creator");
+    });
+
+    it("reverts once someone has voted", async function () {
+      const { governance, alice, bob } = await createdProposalFixture();
+      await governance.connect(bob).castVote(0, VoteType.Yes);
+      await expect(
+        governance.connect(alice).updateProposal(0, "New Title", "New Desc")
+      ).to.be.revertedWith("Governance: proposal already has votes");
+    });
+
+    it("reverts once the proposal is no longer active", async function () {
+      const { governance, alice } = await createdProposalFixture();
+      await governance.connect(alice).endProposal(0);
+      await expect(
+        governance.connect(alice).updateProposal(0, "New Title", "New Desc")
+      ).to.be.revertedWith("Governance: proposal not active");
+    });
+  });
+
+  describe("cancelProposal", function () {
+    async function createdProposalFixture() {
+      const ctx = await deployFixture();
+      await ctx.governance.connect(ctx.alice).createProposal("Title", "Desc", "Treasury", ONE_DAY);
+      return ctx;
+    }
+
+    it("lets the creator cancel a proposal before any votes", async function () {
+      const { governance, alice } = await createdProposalFixture();
+      await expect(governance.connect(alice).cancelProposal(0))
+        .to.emit(governance, "ProposalCancelled")
+        .withArgs(0, alice.address);
+      expect(await governance.state(0)).to.equal(ProposalState.Cancelled);
+    });
+
+    it("blocks further votes once cancelled", async function () {
+      const { governance, alice, bob } = await createdProposalFixture();
+      await governance.connect(alice).cancelProposal(0);
+      await expect(governance.connect(bob).castVote(0, VoteType.Yes)).to.be.revertedWith(
+        "Governance: voting closed"
+      );
+    });
+
+    it("still allows reading the proposal after cancellation", async function () {
+      const { governance, alice } = await createdProposalFixture();
+      await governance.connect(alice).cancelProposal(0);
+      const proposal = await governance.getProposal(0);
+      expect(proposal.title).to.equal("Title");
+    });
+
+    it("reverts when called by a non-creator", async function () {
+      const { governance, bob } = await createdProposalFixture();
+      await expect(governance.connect(bob).cancelProposal(0)).to.be.revertedWith(
+        "Governance: not proposal creator"
+      );
+    });
+
+    it("reverts once someone has voted", async function () {
+      const { governance, alice, bob } = await createdProposalFixture();
+      await governance.connect(bob).castVote(0, VoteType.Yes);
+      await expect(governance.connect(alice).cancelProposal(0)).to.be.revertedWith(
+        "Governance: proposal already has votes"
+      );
     });
   });
 });

@@ -1,7 +1,7 @@
 {
   "network": "sepolia",
   "chainId": 11155111,
-  "govToken": "0xB9D2ef59823d4F90CBd37aA5109Cd58b5f6b5aBc",
-  "governance": "0x35a17fA751909586109038ff294375104ce0c940",
-  "deployedAt": "2026-07-27T16:40:52.110Z"
+  "govToken": "0x26EaD43d823d7958E9A0784fe0F63D6cf7927f88",
+  "governance": "0x38d008e6FAd52fc2f72062C9d4D4378d5075AA77",
+  "deployedAt": "2026-07-29T19:12:48.866Z"
 }

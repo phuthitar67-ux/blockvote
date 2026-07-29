@@ -13,10 +13,15 @@ import {
   Hash,
   Network,
   Loader2,
+  Pencil,
+  StopCircle,
+  Ban,
 } from "lucide-react";
 import AmbientBackground from "@/app/components/AmbientBackground";
+import ConfirmDialog from "@/app/components/ConfirmDialog";
 import { useWallet } from "@/lib/WalletContext";
 import { useGovernance } from "@/lib/GovernanceContext";
+import { useToast } from "@/lib/ToastContext";
 import { describeTxError } from "@/lib/web3/errors";
 import { statusLabels } from "@/lib/uiConstants";
 
@@ -93,16 +98,95 @@ function ResultBar({ label, count, percent, color, textColor }) {
   );
 }
 
+function EditProposalModal({ open, initialTitle, initialDescription, loading, onSave, onCancel }) {
+  const [title, setTitle] = useState(initialTitle);
+  const [description, setDescription] = useState(initialDescription);
+
+  useEffect(() => {
+    if (open) {
+      setTitle(initialTitle);
+      setDescription(initialDescription);
+    }
+  }, [open, initialTitle, initialDescription]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+      <div className="fade-up w-full max-w-lg rounded-[28px] border border-white/10 bg-[#111725] p-8">
+        <h3 className="text-lg font-semibold text-white">แก้ไขข้อเสนอ</h3>
+
+        <div className="mt-6 space-y-4">
+          <div>
+            <label className="text-xs text-slate-400">ชื่อข้อเสนอ</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-blue-500/50"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400">รายละเอียด</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={5}
+              className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-blue-500/50"
+            />
+          </div>
+        </div>
+
+        <div className="mt-8 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={loading}
+            className="secondary-btn h-11 px-6 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            ยกเลิก
+          </button>
+          <button
+            type="button"
+            onClick={() => onSave(title.trim(), description.trim())}
+            disabled={loading || !title.trim()}
+            className="primary-btn inline-flex h-11 items-center gap-2 px-6 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading && <Loader2 size={16} className="animate-spin" />}
+            บันทึก
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProposalDetailPage({ params }) {
   const { id } = use(params);
   const { address, chainName } = useWallet();
-  const { proposals, loadingProposals, myVotes, castVote, getCreationTxHash, VOTE_TYPE } =
-    useGovernance();
+  const {
+    proposals,
+    loadingProposals,
+    myVotes,
+    castVote,
+    getCreationTxHash,
+    endProposal,
+    updateProposal,
+    cancelProposal,
+    VOTE_TYPE,
+  } = useGovernance();
+  const { showToast } = useToast();
 
   const proposal = proposals.find((p) => p.id === Number(id));
   const [txHash, setTxHash] = useState(null);
   const [isVoting, setIsVoting] = useState(false);
   const [voteError, setVoteError] = useState(null);
+
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [isEnding, setIsEnding] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     if (!proposal) return;
@@ -145,6 +229,10 @@ export default function ProposalDetailPage({ params }) {
   const hasVoted = myVoteCode !== VOTE_TYPE.None;
   const canVote = proposal.status === "active" && !!address;
 
+  const isCreator = !!address && proposal.creator.toLowerCase() === address.toLowerCase();
+  const hasVotes = total > 0;
+  const canManage = isCreator && proposal.status === "active";
+
   async function handleVote(choice) {
     if (hasVoted || isVoting || !canVote) return;
     setVoteError(null);
@@ -155,6 +243,45 @@ export default function ProposalDetailPage({ params }) {
       setVoteError(describeTxError(err));
     } finally {
       setIsVoting(false);
+    }
+  }
+
+  async function handleEndProposal() {
+    setIsEnding(true);
+    try {
+      await endProposal(proposal.id);
+      setShowEndConfirm(false);
+      showToast("ปิดโหวตข้อเสนอนี้เรียบร้อยแล้ว", "success");
+    } catch (err) {
+      showToast(describeTxError(err), "error");
+    } finally {
+      setIsEnding(false);
+    }
+  }
+
+  async function handleCancelProposal() {
+    setIsCancelling(true);
+    try {
+      await cancelProposal(proposal.id);
+      setShowCancelConfirm(false);
+      showToast("ยกเลิกข้อเสนอนี้เรียบร้อยแล้ว", "success");
+    } catch (err) {
+      showToast(describeTxError(err), "error");
+    } finally {
+      setIsCancelling(false);
+    }
+  }
+
+  async function handleUpdateProposal(title, description) {
+    setIsUpdating(true);
+    try {
+      await updateProposal(proposal.id, title, description);
+      setShowEditModal(false);
+      showToast("แก้ไขข้อเสนอเรียบร้อยแล้ว", "success");
+    } catch (err) {
+      showToast(describeTxError(err), "error");
+    } finally {
+      setIsUpdating(false);
     }
   }
 
@@ -209,6 +336,45 @@ export default function ProposalDetailPage({ params }) {
                 </span>
               </div>
             </div>
+
+            {/* Creator controls — only the proposal's own creator sees these */}
+            {isCreator && (
+              <div
+                className="fade-up mt-8 flex flex-wrap items-center gap-3 rounded-[32px] border border-white/10 bg-[#111725] p-6"
+                style={{ animationDelay: "60ms" }}
+              >
+                <span className="mr-1 text-xs font-medium text-slate-400">จัดการข้อเสนอ:</span>
+                <button
+                  type="button"
+                  onClick={() => setShowEndConfirm(true)}
+                  disabled={!canManage}
+                  className="secondary-btn h-10 gap-2 px-4 text-xs disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <StopCircle size={14} />
+                  ปิดโหวต
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(true)}
+                  disabled={!canManage || hasVotes}
+                  title={hasVotes ? "แก้ไขไม่ได้เนื่องจากมีผู้โหวตแล้ว" : undefined}
+                  className="secondary-btn h-10 gap-2 px-4 text-xs disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Pencil size={14} />
+                  แก้ไข
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCancelConfirm(true)}
+                  disabled={!canManage || hasVotes}
+                  title={hasVotes ? "ยกเลิกไม่ได้เนื่องจากมีผู้โหวตแล้ว" : undefined}
+                  className="inline-flex h-10 items-center gap-2 rounded-2xl border border-red-500/30 bg-red-500/5 px-4 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Ban size={14} />
+                  ยกเลิกข้อเสนอ
+                </button>
+              </div>
+            )}
 
             {/* Vote panel */}
             <div
@@ -313,6 +479,36 @@ export default function ProposalDetailPage({ params }) {
               </p>
             </div>
           </div>
+
+          <ConfirmDialog
+            open={showEndConfirm}
+            title="ปิดโหวตข้อเสนอนี้?"
+            message="เมื่อปิดโหวตแล้ว จะไม่สามารถลงคะแนนเพิ่มได้อีก แต่ยังดูผลโหวตปัจจุบันได้ตามปกติ การทำรายการนี้ไม่สามารถย้อนกลับได้"
+            confirmLabel="ยืนยันปิดโหวต"
+            loading={isEnding}
+            onConfirm={handleEndProposal}
+            onCancel={() => setShowEndConfirm(false)}
+          />
+
+          <ConfirmDialog
+            open={showCancelConfirm}
+            title="ยกเลิกข้อเสนอนี้?"
+            message="ข้อเสนอที่ถูกยกเลิกจะไม่สามารถลงคะแนนได้อีก แต่ยังดูรายละเอียดได้ การทำรายการนี้ไม่สามารถย้อนกลับได้"
+            confirmLabel="ยืนยันยกเลิก"
+            danger
+            loading={isCancelling}
+            onConfirm={handleCancelProposal}
+            onCancel={() => setShowCancelConfirm(false)}
+          />
+
+          <EditProposalModal
+            open={showEditModal}
+            initialTitle={proposal.title}
+            initialDescription={proposal.description}
+            loading={isUpdating}
+            onSave={handleUpdateProposal}
+            onCancel={() => setShowEditModal(false)}
+          />
         </section>
   );
 }

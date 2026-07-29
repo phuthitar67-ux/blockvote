@@ -367,7 +367,7 @@ export default function CreateProposalPage() {
             <div className="border-b border-white/10 p-8 pb-6">
               <h2 className="text-lg font-semibold text-white">ข้อเสนอของคุณ</h2>
               <p className="mt-1 text-sm text-slate-400">
-                สถานะจะเปลี่ยนอัตโนมัติเมื่อครบกำหนดเวลาโหวต (กำหนดโดย Smart Contract ไม่สามารถปิดโหวตเองได้)
+                สถานะจะเปลี่ยนอัตโนมัติเมื่อครบกำหนดเวลาโหวต หรือคุณสามารถปิดโหวต/แก้ไข/ยกเลิกได้เองจากหน้ารายละเอียดข้อเสนอ
               </p>
             </div>
 

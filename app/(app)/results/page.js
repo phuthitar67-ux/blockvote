@@ -18,7 +18,7 @@ import AmbientBackground from "@/app/components/AmbientBackground";
 import PageHeader from "@/app/components/PageHeader";
 import { useGovernance } from "@/lib/GovernanceContext";
 import { getVoteTotal, getYesPercent, groupByCategory, monthlyOutcomesFrom } from "@/lib/web3/format";
-import { categoryColors } from "@/lib/uiConstants";
+import { categoryColors, statusLabels } from "@/lib/uiConstants";
 
 const tooltipStyle = {
   background: "#101625",
@@ -274,6 +274,57 @@ export default function ResultsPage() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* All proposal results */}
+          <div className="fade-up mt-8 overflow-hidden rounded-[32px] border border-white/10 bg-[#111725]" style={{ animationDelay: "280ms" }}>
+            <div className="p-8 pb-4">
+              <h2 className="text-lg font-semibold text-white">All Proposal Results</h2>
+            </div>
+
+            {proposals.length === 0 ? (
+              <p className="px-8 pb-8 text-sm text-slate-400">ยังไม่มีข้อเสนอในระบบ</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-y border-white/10 text-xs uppercase tracking-wider text-slate-500">
+                      <th className="px-8 py-3 font-medium">Proposal Title</th>
+                      <th className="px-4 py-3 font-medium">Total YES Weight</th>
+                      <th className="px-4 py-3 font-medium">Total NO Weight</th>
+                      <th className="px-4 py-3 font-medium">Winner</th>
+                      <th className="px-4 py-3 font-medium">Status</th>
+                      <th className="px-8 py-3 font-medium">End Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {proposals.map((p) => {
+                      const winner = p.votesYes === p.votesNo ? "Tie" : p.votesYes > p.votesNo ? "YES" : "NO";
+                      const status = statusLabels[p.status];
+                      return (
+                        <tr key={p.id} className="border-b border-white/5 last:border-0">
+                          <td className="max-w-[280px] truncate px-8 py-4 font-medium text-white">
+                            <span className="mr-2 rounded-full bg-blue-500/10 px-2 py-0.5 text-[11px] font-semibold text-blue-400">
+                              #{p.id}
+                            </span>
+                            {p.title}
+                          </td>
+                          <td className="px-4 py-4 text-emerald-400">{p.votesYes.toLocaleString()}</td>
+                          <td className="px-4 py-4 text-red-400">{p.votesNo.toLocaleString()}</td>
+                          <td className="px-4 py-4 font-semibold text-white">{winner}</td>
+                          <td className="px-4 py-4">
+                            <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${status.bg} ${status.color}`}>
+                              {status.text}
+                            </span>
+                          </td>
+                          <td className="px-8 py-4 text-slate-400">{p.votingDeadline}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       </section>
