@@ -13,7 +13,7 @@ import {
   YAxis,
   CartesianGrid,
 } from "recharts";
-import { Trophy, CheckCircle2, ShieldCheck, Hash } from "lucide-react";
+import { Trophy, CheckCircle2, XCircle, Clock3, StopCircle, Ban, ShieldCheck, Hash } from "lucide-react";
 import AmbientBackground from "@/app/components/AmbientBackground";
 import PageHeader from "@/app/components/PageHeader";
 import { useGovernance } from "@/lib/GovernanceContext";
@@ -32,6 +32,14 @@ function shortenAddress(addr) {
   return addr.length > 16 ? `${addr.slice(0, 8)}...${addr.slice(-6)}` : addr;
 }
 
+const statusIcon = {
+  active: Clock3,
+  passed: CheckCircle2,
+  rejected: XCircle,
+  ended: StopCircle,
+  cancelled: Ban,
+};
+
 export default function ResultsPage() {
   const { proposals, platformStats, topVoters, getCreationTxHash } = useGovernance();
 
@@ -41,6 +49,8 @@ export default function ResultsPage() {
       : null;
   const mostVotedTotal = mostVoted ? getVoteTotal(mostVoted) : 0;
   const mostVotedPercent = mostVoted ? getYesPercent(mostVoted) : 0;
+  const mostVotedStatus = mostVoted ? statusLabels[mostVoted.status] : null;
+  const MostVotedStatusIcon = mostVoted ? (statusIcon[mostVoted.status] ?? CheckCircle2) : CheckCircle2;
   const categoryBreakdown = groupByCategory(proposals);
   const monthlyOutcomes = monthlyOutcomesFrom(proposals);
 
@@ -187,9 +197,9 @@ export default function ResultsPage() {
                     <span className="rounded-full bg-blue-500/10 px-2.5 py-0.5 font-semibold text-blue-400">
                       #{mostVoted.id}
                     </span>
-                    <span className="flex items-center gap-1 text-emerald-400">
-                      <CheckCircle2 size={13} />
-                      {mostVoted.status === "passed" ? "Passed" : mostVoted.status}
+                    <span className={`flex items-center gap-1 ${mostVotedStatus.color}`}>
+                      <MostVotedStatusIcon size={13} />
+                      {mostVotedStatus.text}
                     </span>
                   </div>
 
