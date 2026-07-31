@@ -13,12 +13,24 @@ import {
   YAxis,
   CartesianGrid,
 } from "recharts";
-import { Trophy, CheckCircle2, XCircle, Clock3, StopCircle, Ban, ShieldCheck, Hash } from "lucide-react";
+import { Trophy, CheckCircle2, XCircle, Clock3, StopCircle, Ban, ShieldCheck, Hash, FileText, TrendingUp, Users, Inbox } from "lucide-react";
 import AmbientBackground from "@/app/components/AmbientBackground";
 import PageHeader from "@/app/components/PageHeader";
 import { useGovernance } from "@/lib/GovernanceContext";
 import { getVoteTotal, getYesPercent, groupByCategory, monthlyOutcomesFrom } from "@/lib/web3/format";
 import { categoryColors, statusLabels } from "@/lib/uiConstants";
+
+// Display-only Thai labels for the on-chain category values (same mapping
+// used on Create Proposal and Proposals Explorer). entry.name / item.category
+// stay in English — this only affects what's rendered.
+const CATEGORY_LABELS = {
+  Protocol: "โปรโตคอล",
+  DeFi: "การเงิน DeFi",
+  Treasury: "คลังทุน",
+  "DAO Ops": "การบริหาร",
+  Grants: "ทุนสนับสนุน",
+  Security: "ความปลอดภัย",
+};
 
 const tooltipStyle = {
   background: "#101625",
@@ -66,43 +78,47 @@ export default function ResultsPage() {
 
         <div className="container max-w-7xl">
           <PageHeader
-            eyebrow="Analytics"
-            title="Results & Analytics"
-            subtitle="สถิติ Governance และตัวชี้วัดการมีส่วนร่วมของผู้ถือโทเคนทั้งหมด"
+            eyebrow="การวิเคราะห์"
+            title="ผลการลงคะแนนและการวิเคราะห์"
+            subtitle="สถิติระบบการลงคะแนนและตัวชี้วัดการมีส่วนร่วมของผู้ถือโทเคนทั้งหมด"
           />
 
           {/* Stat cards */}
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-            <div className="fade-up rounded-3xl border border-white/10 bg-[#111725] p-6">
-              <p className="text-xs font-medium text-slate-400">Total Proposals</p>
-              <p className="mt-3 text-2xl font-bold text-white">
-                {platformStats.totalProposals.toLocaleString()}
-              </p>
+            <div className="fade-up stat-tile">
+              <div className="stat-tile-icon flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-400">
+                <FileText size={18} />
+              </div>
+              <p className="stat-tile-value">{platformStats.totalProposals.toLocaleString()}</p>
+              <p className="stat-tile-label">จำนวนข้อเสนอทั้งหมด</p>
             </div>
-            <div className="fade-up rounded-3xl border border-white/10 bg-[#111725] p-6" style={{ animationDelay: "80ms" }}>
-              <p className="text-xs font-medium text-slate-400">Pass Rate</p>
-              <p className="mt-3 text-2xl font-bold text-emerald-400">
-                {platformStats.passRate}%
-              </p>
+            <div className="fade-up stat-tile" style={{ animationDelay: "80ms" }}>
+              <div className="stat-tile-icon flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400">
+                <CheckCircle2 size={18} />
+              </div>
+              <p className="stat-tile-value">{platformStats.passRate}%</p>
+              <p className="stat-tile-label">อัตราการผ่าน</p>
             </div>
-            <div className="fade-up rounded-3xl border border-white/10 bg-[#111725] p-6" style={{ animationDelay: "160ms" }}>
-              <p className="text-xs font-medium text-slate-400">Avg Participation</p>
-              <p className="mt-3 text-2xl font-bold text-violet-400">
-                {platformStats.avgParticipation}%
-              </p>
+            <div className="fade-up stat-tile" style={{ animationDelay: "160ms" }}>
+              <div className="stat-tile-icon flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-500/10 text-violet-400">
+                <TrendingUp size={18} />
+              </div>
+              <p className="stat-tile-value">{platformStats.avgParticipation}%</p>
+              <p className="stat-tile-label">การมีส่วนร่วมเฉลี่ย</p>
             </div>
-            <div className="fade-up rounded-3xl border border-white/10 bg-[#111725] p-6" style={{ animationDelay: "240ms" }}>
-              <p className="text-xs font-medium text-slate-400">Unique Voters</p>
-              <p className="mt-3 text-2xl font-bold text-amber-400">
-                {platformStats.totalVoters.toLocaleString()}
-              </p>
+            <div className="fade-up stat-tile" style={{ animationDelay: "240ms" }}>
+              <div className="stat-tile-icon flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-400">
+                <Users size={18} />
+              </div>
+              <p className="stat-tile-value">{platformStats.totalVoters.toLocaleString()}</p>
+              <p className="stat-tile-label">ผู้โหวตทั้งหมด</p>
             </div>
           </div>
 
           {/* Charts */}
           <div className="mt-8 grid gap-8 lg:grid-cols-2">
             <div className="fade-up rounded-[32px] border border-white/10 bg-[#111725] p-8">
-              <h2 className="text-lg font-semibold text-white">Proposals by Category</h2>
+              <h2 className="text-lg font-semibold text-white">ข้อเสนอแยกตามหมวดหมู่</h2>
 
               <div className="mt-4 flex flex-col items-center gap-6 sm:flex-row">
                 <div className="h-64 w-64 shrink-0">
@@ -124,7 +140,10 @@ export default function ResultsPage() {
                           />
                         ))}
                       </Pie>
-                      <Tooltip contentStyle={tooltipStyle} />
+                      <Tooltip
+                        contentStyle={tooltipStyle}
+                        formatter={(value, name) => [value, CATEGORY_LABELS[name] ?? name]}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -136,7 +155,7 @@ export default function ResultsPage() {
                         className="h-2.5 w-2.5 shrink-0 rounded-full"
                         style={{ backgroundColor: categoryColors[entry.name] ?? "#94a3b8" }}
                       />
-                      <span className="text-slate-300">{entry.name}</span>
+                      <span className="text-slate-300">{CATEGORY_LABELS[entry.name] ?? entry.name}</span>
                       <span className="ml-auto font-semibold text-white">{entry.value}</span>
                     </div>
                   ))}
@@ -148,7 +167,7 @@ export default function ResultsPage() {
               className="fade-up rounded-[32px] border border-white/10 bg-[#111725] p-8"
               style={{ animationDelay: "100ms" }}
             >
-              <h2 className="text-lg font-semibold text-white">Monthly Proposal Outcomes</h2>
+              <h2 className="text-lg font-semibold text-white">ผลข้อเสนอรายเดือน</h2>
 
               <div className="mt-6 h-64">
                 <ResponsiveContainer width="100%" height="100%">
@@ -166,13 +185,13 @@ export default function ResultsPage() {
 
               <div className="mt-4 flex items-center justify-center gap-6 text-xs text-slate-400">
                 <span className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#5b6cff]" /> Active
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#5b6cff]" /> กำลังโหวต
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#f87171]" /> Failed
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#f87171]" /> ไม่ผ่าน
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#34d399]" /> Passed
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#34d399]" /> ผ่าน
                 </span>
               </div>
             </div>
@@ -186,18 +205,23 @@ export default function ResultsPage() {
             >
               <div className="flex items-center gap-3">
                 <Trophy size={20} className="text-amber-400" />
-                <h2 className="text-lg font-semibold text-white">Most Voted Proposal</h2>
+                <h2 className="text-lg font-semibold text-white">ข้อเสนอที่มีผู้โหวตมากที่สุด</h2>
               </div>
 
               {!mostVoted ? (
-                <p className="mt-5 text-sm text-slate-400">ยังไม่มีข้อเสนอในระบบ</p>
+                <div className="empty-state">
+                  <span className="empty-state-icon">
+                    <Trophy size={18} />
+                  </span>
+                  <p className="empty-state-desc">ยังไม่มีข้อเสนอในระบบ</p>
+                </div>
               ) : (
                 <>
-                  <div className="mt-5 flex items-center gap-2 text-xs">
-                    <span className="rounded-full bg-blue-500/10 px-2.5 py-0.5 font-semibold text-blue-400">
+                  <div className="mt-5 flex items-center gap-2">
+                    <span className="pill bg-blue-500/10 text-blue-400">
                       #{mostVoted.id}
                     </span>
-                    <span className={`flex items-center gap-1 ${mostVotedStatus.color}`}>
+                    <span className={`pill ${mostVotedStatus.bg} ${mostVotedStatus.color}`}>
                       <MostVotedStatusIcon size={13} />
                       {mostVotedStatus.text}
                     </span>
@@ -207,8 +231,8 @@ export default function ResultsPage() {
 
                   <div className="mt-5">
                     <div className="mb-2 flex items-center justify-between text-xs text-slate-400">
-                      <span>YES {mostVotedPercent}%</span>
-                      <span>NO {100 - mostVotedPercent}%</span>
+                      <span>เห็นด้วย {mostVotedPercent}%</span>
+                      <span>ไม่เห็นด้วย {100 - mostVotedPercent}%</span>
                     </div>
                     <div className="h-2.5 overflow-hidden rounded-full bg-white/10">
                       <div
@@ -219,12 +243,12 @@ export default function ResultsPage() {
                   </div>
 
                   <p className="mt-4 text-xs text-slate-400">
-                    {mostVotedTotal.toLocaleString()} total votes
+                    {mostVotedTotal.toLocaleString()} โหวตทั้งหมด
                   </p>
 
                   <div className="mt-5 flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-xs text-slate-400">
                     <ShieldCheck size={14} className="text-emerald-400" />
-                    Blockchain Verified
+                    ตรวจสอบได้บน Blockchain
                     <span className="ml-auto flex items-center gap-1 font-mono text-slate-500">
                       <Hash size={12} />
                       {mostVotedTxHash ? `${mostVotedTxHash.slice(0, 8)}...${mostVotedTxHash.slice(-4)}` : "..."}
@@ -239,20 +263,25 @@ export default function ResultsPage() {
               style={{ animationDelay: "220ms" }}
             >
               <div className="p-8 pb-4">
-                <h2 className="text-lg font-semibold text-white">Most Active Voters</h2>
+                <h2 className="text-lg font-semibold text-white">ผู้โหวตที่ใช้งานมากที่สุด</h2>
               </div>
 
               {topVoters.length === 0 ? (
-                <p className="px-8 pb-8 text-sm text-slate-400">ยังไม่มีผู้โหวตในระบบ</p>
+                <div className="empty-state">
+                  <span className="empty-state-icon">
+                    <Users size={18} />
+                  </span>
+                  <p className="empty-state-desc">ยังไม่มีผู้โหวตในระบบ</p>
+                </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
+                  <table className="data-table w-full text-left text-sm">
                     <thead>
-                      <tr className="border-y border-white/10 text-xs uppercase tracking-wider text-slate-500">
-                        <th className="px-8 py-3 font-medium">Voter</th>
-                        <th className="px-4 py-3 font-medium">Votes</th>
-                        <th className="px-4 py-3 font-medium">Power</th>
-                        <th className="px-8 py-3 font-medium">Participation</th>
+                      <tr className="border-y border-white/10">
+                        <th className="px-8 py-3">ผู้โหวต</th>
+                        <th className="px-4 py-3">จำนวนโหวต</th>
+                        <th className="px-4 py-3">น้ำหนักเสียง</th>
+                        <th className="px-8 py-3">การมีส่วนร่วม</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -289,32 +318,37 @@ export default function ResultsPage() {
           {/* All proposal results */}
           <div className="fade-up mt-8 overflow-hidden rounded-[32px] border border-white/10 bg-[#111725]" style={{ animationDelay: "280ms" }}>
             <div className="p-8 pb-4">
-              <h2 className="text-lg font-semibold text-white">All Proposal Results</h2>
+              <h2 className="text-lg font-semibold text-white">ผลข้อเสนอทั้งหมด</h2>
             </div>
 
             {proposals.length === 0 ? (
-              <p className="px-8 pb-8 text-sm text-slate-400">ยังไม่มีข้อเสนอในระบบ</p>
+              <div className="empty-state">
+                <span className="empty-state-icon">
+                  <FileText size={18} />
+                </span>
+                <p className="empty-state-desc">ยังไม่มีข้อเสนอในระบบ</p>
+              </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
+                <table className="data-table w-full text-left text-sm">
                   <thead>
-                    <tr className="border-y border-white/10 text-xs uppercase tracking-wider text-slate-500">
-                      <th className="px-8 py-3 font-medium">Proposal Title</th>
-                      <th className="px-4 py-3 font-medium">Total YES Weight</th>
-                      <th className="px-4 py-3 font-medium">Total NO Weight</th>
-                      <th className="px-4 py-3 font-medium">Winner</th>
-                      <th className="px-4 py-3 font-medium">Status</th>
-                      <th className="px-8 py-3 font-medium">End Time</th>
+                    <tr className="border-y border-white/10">
+                      <th className="px-8 py-3">ชื่อข้อเสนอ</th>
+                      <th className="px-4 py-3">น้ำหนักเสียงเห็นด้วย</th>
+                      <th className="px-4 py-3">น้ำหนักเสียงไม่เห็นด้วย</th>
+                      <th className="px-4 py-3">ผลลัพธ์</th>
+                      <th className="px-4 py-3">สถานะ</th>
+                      <th className="px-8 py-3">วันสิ้นสุด</th>
                     </tr>
                   </thead>
                   <tbody>
                     {proposals.map((p) => {
-                      const winner = p.votesYes === p.votesNo ? "Tie" : p.votesYes > p.votesNo ? "YES" : "NO";
+                      const winner = p.votesYes === p.votesNo ? "เสมอ" : p.votesYes > p.votesNo ? "เห็นด้วย" : "ไม่เห็นด้วย";
                       const status = statusLabels[p.status];
                       return (
                         <tr key={p.id} className="border-b border-white/5 last:border-0">
                           <td className="max-w-[280px] truncate px-8 py-4 font-medium text-white">
-                            <span className="mr-2 rounded-full bg-blue-500/10 px-2 py-0.5 text-[11px] font-semibold text-blue-400">
+                            <span className="pill mr-2 bg-blue-500/10 text-blue-400">
                               #{p.id}
                             </span>
                             {p.title}
@@ -323,7 +357,7 @@ export default function ResultsPage() {
                           <td className="px-4 py-4 text-red-400">{p.votesNo.toLocaleString()}</td>
                           <td className="px-4 py-4 font-semibold text-white">{winner}</td>
                           <td className="px-4 py-4">
-                            <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${status.bg} ${status.color}`}>
+                            <span className={`pill ${status.bg} ${status.color}`}>
                               {status.text}
                             </span>
                           </td>

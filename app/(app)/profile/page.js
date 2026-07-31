@@ -11,6 +11,7 @@ import {
   Bell,
   Mail,
   Save,
+  FileText,
 } from "lucide-react";
 import AmbientBackground from "@/app/components/AmbientBackground";
 import { useWallet } from "@/lib/WalletContext";
@@ -20,20 +21,25 @@ import { describeTxError } from "@/lib/web3/errors";
 import { statusLabels } from "@/lib/uiConstants";
 
 const TABS = [
-  { key: "history", label: "Vote History" },
-  { key: "proposals", label: "My Proposals" },
-  { key: "settings", label: "Settings" },
+  { key: "history", label: "ประวัติการโหวต" },
+  { key: "proposals", label: "ข้อเสนอของฉัน" },
+  { key: "settings", label: "ตั้งค่า" },
 ];
 
 const voteStyle = {
-  YES: { icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-500/10" },
-  NO: { icon: XCircle, color: "text-red-400", bg: "bg-red-500/10" },
-  ABSTAIN: { icon: MinusCircle, color: "text-slate-400", bg: "bg-slate-500/10" },
+  YES: { icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-500/10", text: "เห็นด้วย" },
+  NO: { icon: XCircle, color: "text-red-400", bg: "bg-red-500/10", text: "ไม่เห็นด้วย" },
+  ABSTAIN: { icon: MinusCircle, color: "text-slate-400", bg: "bg-slate-500/10", text: "งดออกเสียง" },
 };
 
 const statusStyle = {
   Confirmed: "text-emerald-400 bg-emerald-500/10",
   Pending: "text-amber-400 bg-amber-500/10",
+};
+
+const statusText = {
+  Confirmed: "ยืนยันแล้ว",
+  Pending: "รอดำเนินการ",
 };
 
 function shortenAddress(addr) {
@@ -93,16 +99,16 @@ export default function ProfilePage() {
 
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h1 className="text-xl font-bold text-white">Governance Member</h1>
-                    <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-400">
-                      Active Voter
+                    <h1 className="text-xl font-bold text-white">สมาชิกระบบ</h1>
+                    <span className="pill bg-emerald-500/10 text-emerald-400">
+                      สมาชิกที่ใช้งานอยู่
                     </span>
                   </div>
                   <p className="mt-1 truncate font-mono text-sm text-blue-400">
                     {displayAddress}
                   </p>
                   <p className="mt-2 text-xs text-slate-400">
-                    {myVotingHistory.length} votes cast · {myProposals.length} proposals created
+                    โหวตแล้ว {myVotingHistory.length} ครั้ง · สร้างข้อเสนอ {myProposals.length} รายการ
                   </p>
                 </div>
               </div>
@@ -110,33 +116,33 @@ export default function ProfilePage() {
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:w-auto">
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-center">
                   <p className="text-[10px] uppercase tracking-wider text-slate-500">
-                    GOV Balance
+                    ยอดคงเหลือ GOV
                   </p>
-                  <p className="mt-1 text-base font-bold text-white">
+                  <p className="mt-1 text-lg font-bold text-white">
                     {tokenBalance.toLocaleString()}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-center">
                   <p className="text-[10px] uppercase tracking-wider text-slate-500">
-                    Voting Power
+                    สิทธิ์ในการลงคะแนน
                   </p>
-                  <p className="mt-1 text-base font-bold text-blue-400">
+                  <p className="mt-1 text-lg font-bold text-blue-400">
                     {votingPowerPct.toFixed(1)}%
                   </p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-center">
                   <p className="text-[10px] uppercase tracking-wider text-slate-500">
-                    Proposals Created
+                    ข้อเสนอที่สร้าง
                   </p>
-                  <p className="mt-1 text-base font-bold text-emerald-400">
+                  <p className="mt-1 text-lg font-bold text-emerald-400">
                     {myProposals.length}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-center">
                   <p className="text-[10px] uppercase tracking-wider text-slate-500">
-                    Participation
+                    การมีส่วนร่วม
                   </p>
-                  <p className="mt-1 text-base font-bold text-amber-400">
+                  <p className="mt-1 text-lg font-bold text-amber-400">
                     {participationPct}%
                   </p>
                 </div>
@@ -146,15 +152,15 @@ export default function ProfilePage() {
             {address && !hasClaimed && (
               <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-white/5 pt-6">
                 <p className="text-xs text-slate-400">
-                  รับ Governance Token เริ่มต้น {faucetAmountText} GOV เพื่อเริ่มโหวตหรือสร้างข้อเสนอ (รับได้ครั้งเดียวต่อกระเป๋า)
+                  รับโทเคน GOV เริ่มต้น {faucetAmountText} GOV เพื่อเริ่มโหวตหรือสร้างข้อเสนอ (รับได้ครั้งเดียวต่อกระเป๋า)
                 </p>
                 <button
                   type="button"
                   onClick={handleClaim}
                   disabled={isClaiming}
-                  className="primary-btn text-xs disabled:cursor-not-allowed disabled:opacity-70"
+                  className="primary-btn text-xs disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isClaiming ? "กำลังรับโทเคน..." : `Claim ${faucetAmountText} GOV`}
+                  {isClaiming ? "กำลังรับโทเคน..." : `รับ ${faucetAmountText} GOV`}
                 </button>
               </div>
             )}
@@ -187,23 +193,29 @@ export default function ProfilePage() {
           {/* Tab content */}
           <div className="mt-8">
             {tab === "history" && myVotingHistory.length === 0 && (
-              <div className="fade-up rounded-[28px] border border-white/10 bg-[#111725] py-16 text-center text-sm text-slate-400">
-                {address ? "คุณยังไม่เคยลงคะแนนเสียง" : "เชื่อมต่อกระเป๋าเพื่อดูประวัติการโหวต"}
+              <div className="fade-up empty-state rounded-[28px] border border-white/10 bg-[#111725]">
+                <span className="empty-state-icon">
+                  <Clock3 size={18} />
+                </span>
+                <p className="empty-state-title">
+                  {address ? "คุณยังไม่เคยลงคะแนนเสียง" : "เชื่อมต่อกระเป๋าเพื่อดูประวัติการโหวต"}
+                </p>
+                <p className="empty-state-desc">ประวัติการโหวตทุกครั้งของคุณจะแสดงที่นี่</p>
               </div>
             )}
 
             {tab === "history" && myVotingHistory.length > 0 && (
               <>
                 {/* Table — md and up */}
-                <div className="fade-up hidden overflow-hidden rounded-[28px] border border-white/10 bg-[#111725] md:block">
-                  <table className="w-full text-left text-sm">
+                <div className="fade-up hidden overflow-x-auto rounded-[28px] border border-white/10 bg-[#111725] md:block">
+                  <table className="data-table w-full text-left text-sm">
                     <thead>
-                      <tr className="border-b border-white/10 text-xs uppercase tracking-wider text-slate-400">
-                        <th className="px-6 py-4 font-medium">Proposal</th>
-                        <th className="px-6 py-4 font-medium">Vote</th>
-                        <th className="px-6 py-4 font-medium">Date</th>
-                        <th className="px-6 py-4 font-medium">Transaction Hash</th>
-                        <th className="px-6 py-4 font-medium">Status</th>
+                      <tr className="border-b border-white/10">
+                        <th className="px-6 py-4">ข้อเสนอ</th>
+                        <th className="px-6 py-4">การโหวต</th>
+                        <th className="px-6 py-4">วันที่</th>
+                        <th className="px-6 py-4">Transaction Hash</th>
+                        <th className="px-6 py-4">สถานะ</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -219,11 +231,9 @@ export default function ProfilePage() {
                               #{item.proposalId} {item.proposalTitle}
                             </td>
                             <td className="px-6 py-5">
-                              <span
-                                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${vote.bg} ${vote.color}`}
-                              >
+                              <span className={`pill ${vote.bg} ${vote.color}`}>
                                 <VoteIcon size={13} />
-                                {item.vote}
+                                {vote.text}
                               </span>
                             </td>
                             <td className="px-6 py-5 text-slate-400">{item.date}</td>
@@ -231,10 +241,8 @@ export default function ProfilePage() {
                               {shortenHash(item.txHash)}
                             </td>
                             <td className="px-6 py-5">
-                              <span
-                                className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusStyle[item.status]}`}
-                              >
-                                {item.status}
+                              <span className={`pill ${statusStyle[item.status]}`}>
+                                {statusText[item.status] ?? item.status}
                               </span>
                             </td>
                           </tr>
@@ -258,11 +266,9 @@ export default function ProfilePage() {
                           <p className="text-sm font-semibold text-white">
                             #{item.proposalId} {item.proposalTitle}
                           </p>
-                          <span
-                            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${vote.bg} ${vote.color}`}
-                          >
+                          <span className={`pill shrink-0 ${vote.bg} ${vote.color}`}>
                             <VoteIcon size={13} />
-                            {item.vote}
+                            {vote.text}
                           </span>
                         </div>
 
@@ -275,10 +281,8 @@ export default function ProfilePage() {
                           {shortenHash(item.txHash)}
                         </div>
 
-                        <span
-                          className={`mt-4 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusStyle[item.status]}`}
-                        >
-                          {item.status}
+                        <span className={`pill mt-4 ${statusStyle[item.status]}`}>
+                          {statusText[item.status] ?? item.status}
                         </span>
                       </div>
                     );
@@ -290,8 +294,12 @@ export default function ProfilePage() {
             {tab === "proposals" && (
               <div className="fade-up space-y-4">
                 {myProposals.length === 0 ? (
-                  <div className="rounded-[28px] border border-white/10 bg-[#111725] py-16 text-center text-sm text-slate-400">
-                    คุณยังไม่เคยสร้างข้อเสนอ
+                  <div className="empty-state rounded-[28px] border border-white/10 bg-[#111725]">
+                    <span className="empty-state-icon">
+                      <FileText size={18} />
+                    </span>
+                    <p className="empty-state-title">คุณยังไม่เคยสร้างข้อเสนอ</p>
+                    <p className="empty-state-desc">ข้อเสนอที่คุณสร้างจะแสดงที่นี่พร้อมผลโหวตล่าสุด</p>
                   </div>
                 ) : (
                   myProposals.map((item) => {
@@ -305,10 +313,10 @@ export default function ProfilePage() {
                       >
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="rounded-full bg-blue-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-blue-400">
+                            <span className="pill bg-blue-500/10 text-blue-400">
                               #{item.id}
                             </span>
-                            <span className={`text-[11px] font-medium ${status.color}`}>
+                            <span className={`pill ${status.bg} ${status.color}`}>
                               {status.text}
                             </span>
                           </div>
@@ -357,7 +365,7 @@ export default function ProfilePage() {
                       <div>
                         <p className="text-sm font-medium text-white">อีเมลสรุปรายสัปดาห์</p>
                         <p className="text-xs text-slate-400">
-                          สรุปกิจกรรม Governance ทุกสัปดาห์ทางอีเมล
+                          สรุปกิจกรรมระบบทุกสัปดาห์ทางอีเมล
                         </p>
                       </div>
                     </div>
@@ -369,7 +377,7 @@ export default function ProfilePage() {
                       ชื่อที่แสดง
                     </label>
                     <input
-                      defaultValue="Governance Member"
+                      defaultValue="สมาชิกระบบ"
                       className="w-full max-w-sm rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-blue-500/50"
                     />
                   </div>

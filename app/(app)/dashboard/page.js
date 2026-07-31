@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   Tag,
   Wallet,
+  Inbox,
 } from "lucide-react";
 import {
   PieChart,
@@ -41,6 +42,17 @@ function shortenAddress(addr) {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
+function PanelEmptyState({ text }) {
+  return (
+    <div className="empty-state">
+      <span className="empty-state-icon">
+        <Inbox size={18} />
+      </span>
+      <p className="empty-state-desc">{text}</p>
+    </div>
+  );
+}
+
 const tooltipStyle = {
   background: "#101625",
   border: "1px solid rgba(255,255,255,.1)",
@@ -53,9 +65,9 @@ const tooltipStyle = {
 // segments always match the badges shown everywhere else — never introduce
 // a second, inconsistent color mapping for the same three states.
 const STATUS_CHART_COLORS = {
-  Active: "#34d399",
-  Ended: "#fbbf24",
-  Cancelled: "#94a3b8",
+  "กำลังโหวต": "#34d399",
+  "ปิดโหวตแล้ว": "#fbbf24",
+  "ยกเลิกแล้ว": "#94a3b8",
 };
 
 const ACTIVITY_META = {
@@ -113,9 +125,9 @@ export default function DashboardPage() {
 
   const statusChartData = useMemo(
     () => [
-      { name: "Active", value: platformStats.activeProposals },
-      { name: "Ended", value: endedProposals.length },
-      { name: "Cancelled", value: cancelledProposals.length },
+      { name: "กำลังโหวต", value: platformStats.activeProposals },
+      { name: "ปิดโหวตแล้ว", value: endedProposals.length },
+      { name: "ยกเลิกแล้ว", value: cancelledProposals.length },
     ],
     [platformStats, endedProposals, cancelledProposals]
   );
@@ -129,12 +141,12 @@ export default function DashboardPage() {
 
   const dashboardStats = useMemo(
     () => [
-      { icon: FileText, label: "Total Proposals", value: platformStats.totalProposals.toLocaleString(), color: "text-blue-400", bg: "bg-blue-500/10" },
-      { icon: Clock3, label: "Active Proposals", value: platformStats.activeProposals.toLocaleString(), color: "text-emerald-400", bg: "bg-emerald-500/10" },
-      { icon: StopCircle, label: "Ended Proposals", value: endedProposals.length.toLocaleString(), color: "text-amber-400", bg: "bg-amber-500/10" },
-      { icon: Ban, label: "Cancelled Proposals", value: cancelledProposals.length.toLocaleString(), color: "text-red-400", bg: "bg-red-500/10" },
-      { icon: Vote, label: "Total Votes", value: formatCompact(totalVotesCast), color: "text-violet-400", bg: "bg-violet-500/10" },
-      { icon: Users, label: "Governance Members", value: platformStats.totalVoters.toLocaleString(), color: "text-cyan-400", bg: "bg-cyan-500/10" },
+      { icon: FileText, label: "จำนวนข้อเสนอทั้งหมด", value: platformStats.totalProposals.toLocaleString(), color: "text-blue-400", bg: "bg-blue-500/10" },
+      { icon: Clock3, label: "ข้อเสนอที่กำลังเปิดโหวต", value: platformStats.activeProposals.toLocaleString(), color: "text-emerald-400", bg: "bg-emerald-500/10" },
+      { icon: StopCircle, label: "ข้อเสนอที่สิ้นสุดแล้ว", value: endedProposals.length.toLocaleString(), color: "text-amber-400", bg: "bg-amber-500/10" },
+      { icon: Ban, label: "ข้อเสนอที่ถูกยกเลิก", value: cancelledProposals.length.toLocaleString(), color: "text-red-400", bg: "bg-red-500/10" },
+      { icon: Vote, label: "จำนวนโหวตทั้งหมด", value: formatCompact(totalVotesCast), color: "text-violet-400", bg: "bg-violet-500/10" },
+      { icon: Users, label: "สมาชิกระบบ", value: platformStats.totalVoters.toLocaleString(), color: "text-cyan-400", bg: "bg-cyan-500/10" },
     ],
     [platformStats, endedProposals, cancelledProposals, totalVotesCast]
   );
@@ -143,21 +155,21 @@ export default function DashboardPage() {
     () => [
       {
         icon: Tag,
-        label: "Current Token Price",
+        label: "ราคาโทเคนปัจจุบัน",
         value: tokenPriceEth !== null ? `${tokenPriceEth} ETH/GOV` : "--",
         color: "text-amber-400",
         bg: "bg-amber-500/10",
       },
       {
         icon: Coins,
-        label: "Total GOV Supply",
+        label: "จำนวนโทเคน GOV ทั้งหมด",
         value: formatCompact(totalSupply),
         color: "text-violet-400",
         bg: "bg-violet-500/10",
       },
       {
         icon: Wallet,
-        label: "ETH Stored In Contract",
+        label: "จำนวน ETH ภายในสัญญาอัจฉริยะ",
         value: `${ethTreasuryBalance.toLocaleString(undefined, { maximumFractionDigits: 4 })} ETH`,
         color: "text-emerald-400",
         bg: "bg-emerald-500/10",
@@ -168,11 +180,11 @@ export default function DashboardPage() {
 
   const myStats = useMemo(
     () => [
-      { icon: Coins, label: "My GOV Balance", value: `${tokenBalance.toLocaleString()} GOV`, color: "text-violet-400", bg: "bg-violet-500/10" },
-      { icon: TrendingUp, label: "Voting Power", value: `${votingPowerPct.toFixed(1)}%`, color: "text-emerald-400", bg: "bg-emerald-500/10" },
-      { icon: Vote, label: "My Votes", value: myVotingHistory.length.toLocaleString(), color: "text-blue-400", bg: "bg-blue-500/10" },
-      { icon: FileText, label: "My Proposals", value: myCreatedProposals.length.toLocaleString(), color: "text-amber-400", bg: "bg-amber-500/10" },
-      { icon: CheckCircle2, label: "Participation Rate", value: `${participationRate}%`, color: "text-cyan-400", bg: "bg-cyan-500/10" },
+      { icon: Coins, label: "ยอดคงเหลือ GOV ของฉัน", value: `${tokenBalance.toLocaleString()} GOV`, color: "text-violet-400", bg: "bg-violet-500/10" },
+      { icon: TrendingUp, label: "สิทธิ์ในการลงคะแนน", value: `${votingPowerPct.toFixed(1)}%`, color: "text-emerald-400", bg: "bg-emerald-500/10" },
+      { icon: Vote, label: "จำนวนที่ฉันโหวต", value: myVotingHistory.length.toLocaleString(), color: "text-blue-400", bg: "bg-blue-500/10" },
+      { icon: FileText, label: "ข้อเสนอของฉัน", value: myCreatedProposals.length.toLocaleString(), color: "text-amber-400", bg: "bg-amber-500/10" },
+      { icon: CheckCircle2, label: "อัตราการมีส่วนร่วม", value: `${participationRate}%`, color: "text-cyan-400", bg: "bg-cyan-500/10" },
     ],
     [tokenBalance, votingPowerPct, myVotingHistory, myCreatedProposals, participationRate]
   );
@@ -184,13 +196,13 @@ export default function DashboardPage() {
         <div
           key={stat.label}
           style={{ animationDelay: `${index * 60}ms` }}
-          className="fade-up flex h-full flex-col items-center justify-center rounded-md border border-white/10 bg-[#111725] px-5 py-7 text-center transition-all duration-300 hover:-translate-y-1 hover:border-blue-500/30"
+          className="fade-up stat-tile"
         >
-          <div className={`mb-4 flex h-10 w-10 items-center justify-center rounded-2xl ${stat.bg} ${stat.color}`}>
+          <div className={`stat-tile-icon flex h-10 w-10 items-center justify-center rounded-2xl ${stat.bg} ${stat.color}`}>
             <Icon size={18} />
           </div>
-          <p className="text-xl font-bold text-white">{stat.value}</p>
-          <p className="mt-2 text-xs text-slate-400">{stat.label}</p>
+          <p className="stat-tile-value">{stat.value}</p>
+          <p className="stat-tile-label">{stat.label}</p>
         </div>
       );
     },
@@ -206,9 +218,9 @@ export default function DashboardPage() {
         <div className="fade-up flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <span className="text-[11px] font-medium tracking-[0.15em] uppercase text-blue-400">
-              Overview
+              ภาพรวม
             </span>
-            <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">Dashboard</h1>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight text-white">แดชบอร์ด</h1>
             <p className="mt-2 text-xs text-slate-400">
               ยินดีต้อนรับกลับ,{" "}
               <span className="font-mono text-slate-300">{shortenAddress(displayAddress)}</span>{" "}
@@ -227,14 +239,14 @@ export default function DashboardPage() {
 
             <Link href="/create-proposal" className="primary-btn text-xs">
               <PlusCircle size={16} />
-              สร้าง Proposal
+              สร้างข้อเสนอ
             </Link>
           </div>
         </div>
 
         {/* Dashboard Statistics */}
         <h2 className="fade-up mt-10 text-sm font-semibold uppercase tracking-wider text-slate-500">
-          Dashboard Statistics
+          สถิติภาพรวม
         </h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-3 xl:grid-cols-6">
           {dashboardStats.map(renderStatCard)}
@@ -247,7 +259,7 @@ export default function DashboardPage() {
 
         {/* My Statistics */}
         <h2 className="fade-up mt-10 text-sm font-semibold uppercase tracking-wider text-slate-500">
-          My Statistics
+          สถิติของฉัน
         </h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {myStats.map(renderStatCard)}
@@ -255,8 +267,8 @@ export default function DashboardPage() {
 
         {/* Charts */}
         <div className="mt-10 grid gap-5 xl:grid-cols-2">
-          <div className="fade-up rounded-md border border-white/10 bg-[#111725] p-6">
-            <h2 className="text-base font-semibold text-white">Proposal Status</h2>
+          <div className="fade-up rounded-[32px] border border-white/10 bg-[#111725] p-6">
+            <h2 className="text-base font-semibold text-white">สถานะข้อเสนอ</h2>
             <p className="mt-1 text-xs text-slate-400">สัดส่วนสถานะข้อเสนอทั้งหมด</p>
 
             <div className="mt-4 flex flex-col items-center gap-5 sm:flex-row">
@@ -295,8 +307,8 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="fade-up rounded-md border border-white/10 bg-[#111725] p-6" style={{ animationDelay: "80ms" }}>
-            <h2 className="text-base font-semibold text-white">Top 5 Proposals</h2>
+          <div className="fade-up rounded-[32px] border border-white/10 bg-[#111725] p-6" style={{ animationDelay: "80ms" }}>
+            <h2 className="text-base font-semibold text-white">ข้อเสนอยอดนิยม 5 อันดับ</h2>
             <p className="mt-1 text-xs text-slate-400">เรียงตามจำนวนโหวตทั้งหมด</p>
 
             <div className="mt-5 h-64">
@@ -308,7 +320,7 @@ export default function DashboardPage() {
                   <Tooltip
                     contentStyle={tooltipStyle}
                     cursor={{ fill: "rgba(255,255,255,.04)" }}
-                    formatter={(value) => [value.toLocaleString(), "Votes"]}
+                    formatter={(value) => [value.toLocaleString(), "โหวต"]}
                     labelFormatter={(_, payload) => payload?.[0]?.payload?.title ?? ""}
                   />
                   <Bar dataKey="votes" fill="#5b6cff" radius={[0, 6, 6, 0]} />
@@ -320,16 +332,16 @@ export default function DashboardPage() {
 
         {/* Active Proposals + Recent Ended Proposals */}
         <div className="mt-10 grid gap-5 xl:grid-cols-2">
-          <div className="fade-up overflow-hidden rounded-md border border-white/10 bg-[#111725]">
+          <div className="fade-up overflow-hidden rounded-[32px] border border-white/10 bg-[#111725]">
             <div className="flex items-center justify-between p-6 pb-4">
-              <h2 className="text-base font-semibold text-white">Active Proposals</h2>
+              <h2 className="text-base font-semibold text-white">ข้อเสนอที่กำลังเปิดโหวต</h2>
               <Link href="/proposals" className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300">
                 ดูทั้งหมด
                 <ArrowRight size={12} />
               </Link>
             </div>
             {activeProposals.length === 0 ? (
-              <p className="px-6 pb-6 text-sm text-slate-400">ไม่มีข้อเสนอที่กำลังเปิดโหวตอยู่</p>
+              <PanelEmptyState text="ไม่มีข้อเสนอที่กำลังเปิดโหวตอยู่" />
             ) : (
               <div className="divide-y divide-white/5">
                 {activeProposals.map((item) => (
@@ -354,12 +366,12 @@ export default function DashboardPage() {
             )}
           </div>
 
-          <div className="fade-up overflow-hidden rounded-md border border-white/10 bg-[#111725]" style={{ animationDelay: "80ms" }}>
+          <div className="fade-up overflow-hidden rounded-[32px] border border-white/10 bg-[#111725]" style={{ animationDelay: "80ms" }}>
             <div className="p-6 pb-4">
-              <h2 className="text-base font-semibold text-white">Recent Ended Proposals</h2>
+              <h2 className="text-base font-semibold text-white">ข้อเสนอที่เพิ่งปิดโหวต</h2>
             </div>
             {recentEndedProposals.length === 0 ? (
-              <p className="px-6 pb-6 text-sm text-slate-400">ยังไม่มีข้อเสนอที่ปิดโหวตแล้ว</p>
+              <PanelEmptyState text="ยังไม่มีข้อเสนอที่ปิดโหวตแล้ว" />
             ) : (
               <div className="divide-y divide-white/5">
                 {recentEndedProposals.map((item) => {
@@ -380,9 +392,9 @@ export default function DashboardPage() {
                         <span className="truncate text-sm font-medium text-white">{item.title}</span>
                       </div>
                       <div className="mt-2.5 flex items-center gap-4 text-[11px] text-slate-400">
-                        <span className="text-emerald-400">YES {yesPct}%</span>
-                        <span className="text-red-400">NO {noPct}%</span>
-                        <span className="text-slate-400">ABSTAIN {abstainPct}%</span>
+                        <span className="text-emerald-400">เห็นด้วย {yesPct}%</span>
+                        <span className="text-red-400">ไม่เห็นด้วย {noPct}%</span>
+                        <span className="text-slate-400">งดออกเสียง {abstainPct}%</span>
                       </div>
                     </Link>
                   );
@@ -393,12 +405,12 @@ export default function DashboardPage() {
         </div>
 
         {/* Recent Activity */}
-        <div className="fade-up mt-10 overflow-hidden rounded-md border border-white/10 bg-[#111725]">
+        <div className="fade-up mt-10 overflow-hidden rounded-[32px] border border-white/10 bg-[#111725]">
           <div className="p-6 pb-4">
-            <h2 className="text-base font-semibold text-white">Recent Activity</h2>
+            <h2 className="text-base font-semibold text-white">กิจกรรมล่าสุด</h2>
           </div>
           {recentActivity.length === 0 ? (
-            <p className="px-6 pb-6 text-sm text-slate-400">ยังไม่มีความเคลื่อนไหวในระบบ</p>
+            <PanelEmptyState text="ยังไม่มีความเคลื่อนไหวในระบบ" />
           ) : (
             <div className="divide-y divide-white/5">
               {recentActivity.map((activity) => {

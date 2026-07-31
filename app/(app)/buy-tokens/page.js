@@ -19,12 +19,12 @@ import { describeTxError } from "@/lib/web3/errors";
 
 function StatCard({ icon: Icon, label, value, color, bg }) {
   return (
-    <div className="fade-up flex h-full flex-col items-center justify-center rounded-[28px] border border-white/10 bg-[#111725] px-6 py-8 text-center">
-      <div className={`mb-4 flex h-10 w-10 items-center justify-center rounded-2xl ${bg} ${color}`}>
+    <div className="fade-up stat-tile">
+      <div className={`stat-tile-icon flex h-10 w-10 items-center justify-center rounded-2xl ${bg} ${color}`}>
         <Icon size={18} />
       </div>
-      <p className="text-xl font-bold text-white">{value}</p>
-      <p className="mt-2 text-xs text-slate-400">{label}</p>
+      <p className="stat-tile-value">{value}</p>
+      <p className="stat-tile-label">{label}</p>
     </div>
   );
 }
@@ -124,9 +124,9 @@ export default function BuyTokensPage() {
             <ShoppingCart size={20} />
           </div>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-white">Buy Tokens</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-white">ซื้อโทเคน</h1>
             <p className="mt-1 text-sm text-slate-400">
-              เพิ่ม Voting Power ด้วยการซื้อ GOV Token เพิ่มด้วย Sepolia ETH
+              เพิ่มอำนาจการลงคะแนนด้วยการซื้อ GOV Token เพิ่มด้วย Sepolia ETH
             </p>
           </div>
         </div>
@@ -135,21 +135,21 @@ export default function BuyTokensPage() {
         <div className="grid gap-5 sm:grid-cols-3">
           <StatCard
             icon={Coins}
-            label="Current GOV Balance"
+            label="จำนวนโทเคน GOV ที่ถืออยู่"
             value={`${tokenBalance.toLocaleString()} GOV`}
             color="text-violet-400"
             bg="bg-violet-500/10"
           />
           <StatCard
             icon={TrendingUp}
-            label="Current Voting Power"
+            label="สิทธิ์ในการลงคะแนนปัจจุบัน"
             value={`${votingPowerPct.toFixed(1)}%`}
             color="text-emerald-400"
             bg="bg-emerald-500/10"
           />
           <StatCard
             icon={Tag}
-            label="Current Token Price"
+            label="ราคาโทเคนปัจจุบัน"
             value={tokenPriceText}
             color="text-amber-400"
             bg="bg-amber-500/10"
@@ -167,7 +167,7 @@ export default function BuyTokensPage() {
           </p>
 
           <form onSubmit={handleBuy} className="mt-6 max-w-md">
-            <label className="mb-2 block text-xs font-medium text-slate-400">ETH Amount</label>
+            <label className="mb-2 block text-xs font-medium text-slate-400">จำนวน ETH</label>
             <input
               type="number"
               min="0"
@@ -179,7 +179,7 @@ export default function BuyTokensPage() {
             />
 
             <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
-              <span className="text-slate-400">You will receive </span>
+              <span className="text-slate-400">คุณจะได้รับ </span>
               <span className="font-semibold text-white">
                 {estimatedGov.toLocaleString(undefined, { maximumFractionDigits: 4 })} GOV
               </span>
@@ -192,7 +192,7 @@ export default function BuyTokensPage() {
                 <button
                   type="submit"
                   disabled={isBuying || !ethAmount || Number(ethAmount) <= 0}
-                  className="primary-btn w-full disabled:cursor-not-allowed disabled:opacity-70"
+                  className="primary-btn w-full disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isBuying ? (
                     <>
@@ -202,7 +202,7 @@ export default function BuyTokensPage() {
                   ) : (
                     <>
                       <Coins size={18} />
-                      Buy GOV Tokens
+                      ซื้อโทเคน GOV
                     </>
                   )}
                 </button>
@@ -223,16 +223,16 @@ export default function BuyTokensPage() {
           >
             <div className="flex items-center gap-3">
               <Settings size={18} className="text-amber-400" />
-              <h2 className="text-lg font-semibold text-white">Admin Controls</h2>
+              <h2 className="text-lg font-semibold text-white">การจัดการสำหรับผู้ดูแลระบบ</h2>
             </div>
             <p className="mt-2 text-sm text-slate-400">
-              คุณคือเจ้าของสัญญา (Owner) — ควบคุมราคา Token และถอน ETH ที่เก็บไว้ในสัญญาได้
+              คุณคือเจ้าของสัญญา — ควบคุมราคา Token และถอน ETH ที่เก็บไว้ในสัญญาได้
             </p>
 
             <div className="mt-6 grid gap-8 lg:grid-cols-2">
               <form onSubmit={handleSetPrice} className="max-w-sm">
                 <label className="mb-2 block text-xs font-medium text-slate-400">
-                  New Token Price (ETH per 1 GOV)
+                  ราคาโทเคนใหม่ (ETH ต่อ 1 GOV)
                 </label>
                 <div className="flex gap-3">
                   <input
@@ -247,9 +247,9 @@ export default function BuyTokensPage() {
                   <button
                     type="submit"
                     disabled={isUpdatingPrice || !newPrice || Number(newPrice) <= 0}
-                    className="secondary-btn shrink-0 px-5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                    className="secondary-btn shrink-0 px-5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {isUpdatingPrice ? <Loader2 size={16} className="animate-spin" /> : "Update"}
+                    {isUpdatingPrice ? <Loader2 size={16} className="animate-spin" /> : "อัปเดต"}
                   </button>
                 </div>
               </form>
@@ -258,7 +258,7 @@ export default function BuyTokensPage() {
                 <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
                   <span className="flex items-center gap-2 text-sm text-slate-300">
                     <Wallet size={15} className="text-emerald-400" />
-                    Treasury ETH Balance
+                    ยอดคงเหลือ ETH ในคลัง
                   </span>
                   <span className="font-mono text-sm font-semibold text-white">
                     {ethTreasuryBalance.toLocaleString(undefined, { maximumFractionDigits: 6 })} ETH
@@ -268,14 +268,14 @@ export default function BuyTokensPage() {
                   type="button"
                   onClick={handleWithdraw}
                   disabled={isWithdrawing || ethTreasuryBalance <= 0}
-                  className="secondary-btn mt-3 w-full gap-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                  className="secondary-btn mt-3 w-full gap-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isWithdrawing ? (
                     <Loader2 size={16} className="animate-spin" />
                   ) : (
                     <ArrowDownToLine size={16} />
                   )}
-                  Withdraw All ETH
+                  ถอน ETH ทั้งหมด
                 </button>
               </div>
             </div>

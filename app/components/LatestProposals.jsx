@@ -19,7 +19,7 @@ export default function LatestProposals() {
       title: p.title,
       description: p.description,
       progress: getYesPercent(p),
-      votes: `${getVoteTotal(p).toLocaleString()} Votes`,
+      votes: `${getVoteTotal(p).toLocaleString()} โหวต`,
       remain: p.remain,
       status: "กำลังเปิดโหวต",
       color: "bg-emerald-500",
@@ -52,11 +52,11 @@ export default function LatestProposals() {
             >
               {/* Header */}
               <div className="flex items-center justify-between">
-                <span className="rounded-full bg-blue-500/10 px-3 py-1 text-[11px] font-semibold text-blue-400">
+                <span className="pill bg-blue-500/10 text-blue-400">
                   {item.id}
                 </span>
 
-                <span className="flex items-center gap-2 text-[11px] font-medium text-emerald-400">
+                <span className="pill bg-emerald-500/10 text-emerald-400">
                   <CheckCircle2 size={14} />
                   {item.status}
                 </span>

@@ -68,7 +68,7 @@ function VoteButton({ label, icon: Icon, active, disabled, onClick, color }) {
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`flex items-center justify-center gap-2 rounded-2xl border px-6 py-4 text-sm font-semibold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${
+      className={`flex items-center justify-center gap-2 rounded-2xl border px-6 py-4 text-sm font-semibold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-50 ${
         active ? styles.active : styles.base
       }`}
     >
@@ -85,7 +85,7 @@ function ResultBar({ label, count, percent, color, textColor }) {
       <div className="mb-2 flex items-center justify-between text-sm">
         <span className={`font-medium ${textColor}`}>{label}</span>
         <span className="text-slate-400">
-          {count.toLocaleString()} Votes ({displayPercent}%)
+          {count.toLocaleString()} โหวต ({displayPercent}%)
         </span>
       </div>
       <div className="h-2.5 overflow-hidden rounded-full bg-white/10">
@@ -101,13 +101,19 @@ function ResultBar({ label, count, percent, color, textColor }) {
 function EditProposalModal({ open, initialTitle, initialDescription, loading, onSave, onCancel }) {
   const [title, setTitle] = useState(initialTitle);
   const [description, setDescription] = useState(initialDescription);
+  const [prevOpen, setPrevOpen] = useState(open);
+  const [prevInitialTitle, setPrevInitialTitle] = useState(initialTitle);
+  const [prevInitialDescription, setPrevInitialDescription] = useState(initialDescription);
 
-  useEffect(() => {
+  if (prevOpen !== open || prevInitialTitle !== initialTitle || prevInitialDescription !== initialDescription) {
+    setPrevOpen(open);
+    setPrevInitialTitle(initialTitle);
+    setPrevInitialDescription(initialDescription);
     if (open) {
       setTitle(initialTitle);
       setDescription(initialDescription);
     }
-  }, [open, initialTitle, initialDescription]);
+  }
 
   if (!open) return null;
 
@@ -141,7 +147,7 @@ function EditProposalModal({ open, initialTitle, initialDescription, loading, on
             type="button"
             onClick={onCancel}
             disabled={loading}
-            className="secondary-btn h-11 px-6 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+            className="secondary-btn h-11 px-6 text-sm disabled:cursor-not-allowed disabled:opacity-50"
           >
             ยกเลิก
           </button>
@@ -149,7 +155,7 @@ function EditProposalModal({ open, initialTitle, initialDescription, loading, on
             type="button"
             onClick={() => onSave(title.trim(), description.trim())}
             disabled={loading || !title.trim()}
-            className="primary-btn inline-flex h-11 items-center gap-2 px-6 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+            className="primary-btn inline-flex h-11 items-center gap-2 px-6 text-sm disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading && <Loader2 size={16} className="animate-spin" />}
             บันทึก
@@ -195,7 +201,8 @@ export default function ProposalDetailPage({ params }) {
 
   if (loadingProposals) {
     return (
-      <section className="flex min-h-[60vh] items-center justify-center bg-[#060816] px-6 text-center text-slate-400">
+      <section className="flex min-h-[60vh] flex-col items-center justify-center gap-3 bg-[#060816] px-6 text-center text-slate-400">
+        <Loader2 size={22} className="animate-spin text-blue-400" />
         กำลังโหลดข้อมูลจาก Blockchain...
       </section>
     );
@@ -204,8 +211,11 @@ export default function ProposalDetailPage({ params }) {
   if (!proposal) {
     return (
       <section className="flex min-h-[60vh] items-center justify-center bg-[#060816] px-6 text-center">
-        <div>
-          <h1 className="text-2xl font-bold text-white">ไม่พบข้อเสนอนี้</h1>
+        <div className="flex flex-col items-center">
+          <span className="empty-state-icon">
+            <XCircle size={20} />
+          </span>
+          <h1 className="mt-1 text-2xl font-bold text-white">ไม่พบข้อเสนอนี้</h1>
           <p className="mt-3 text-sm text-slate-400">
             ข้อเสนอหมายเลข #{id} ไม่มีอยู่ในระบบ
           </p>
@@ -226,6 +236,7 @@ export default function ProposalDetailPage({ params }) {
   const myVoteLabel = { [VOTE_TYPE.Yes]: "yes", [VOTE_TYPE.No]: "no", [VOTE_TYPE.Abstain]: "abstain" }[
     myVoteCode
   ];
+  const myVoteLabelText = { yes: "เห็นด้วย", no: "ไม่เห็นด้วย", abstain: "งดออกเสียง" }[myVoteLabel];
   const hasVoted = myVoteCode !== VOTE_TYPE.None;
   const canVote = proposal.status === "active" && !!address;
 
@@ -301,11 +312,11 @@ export default function ProposalDetailPage({ params }) {
             {/* Header card */}
             <div className="fade-up rounded-[32px] border border-white/10 bg-[#111725] p-8 lg:p-10">
               <div className="flex flex-wrap items-center justify-between gap-4">
-                <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-400">
+                <span className="pill bg-blue-500/10 text-blue-400">
                   #{proposal.id}
                 </span>
                 <span
-                  className={`flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${status.bg} ${status.color}`}
+                  className={`pill ${status.bg} ${status.color}`}
                 >
                   <CheckCircle2 size={14} />
                   {status.text}
@@ -324,8 +335,8 @@ export default function ProposalDetailPage({ params }) {
               <div className="mt-8 grid gap-5 border-t border-white/5 pt-8 sm:grid-cols-2 lg:grid-cols-4">
                 <MetaItem icon={User} label="ผู้สร้าง" value={shortenAddress(proposal.creator)} />
                 <MetaItem icon={Calendar} label="วันที่สร้าง" value={proposal.createdAt} />
-                <MetaItem icon={Clock3} label="Voting Deadline" value={proposal.votingDeadline} />
-                <MetaItem icon={Network} label="Network" value={chainName ?? "Sepolia"} />
+                <MetaItem icon={Clock3} label="วันสิ้นสุดโหวต" value={proposal.votingDeadline} />
+                <MetaItem icon={Network} label="เครือข่าย" value={chainName ?? "Sepolia"} />
               </div>
 
               <div className="mt-5 flex flex-wrap items-center gap-2 text-xs text-slate-400">
@@ -348,7 +359,7 @@ export default function ProposalDetailPage({ params }) {
                   type="button"
                   onClick={() => setShowEndConfirm(true)}
                   disabled={!canManage}
-                  className="secondary-btn h-10 gap-2 px-4 text-xs disabled:cursor-not-allowed disabled:opacity-40"
+                  className="secondary-btn h-10 gap-2 px-4 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <StopCircle size={14} />
                   ปิดโหวต
@@ -358,7 +369,7 @@ export default function ProposalDetailPage({ params }) {
                   onClick={() => setShowEditModal(true)}
                   disabled={!canManage || hasVotes}
                   title={hasVotes ? "แก้ไขไม่ได้เนื่องจากมีผู้โหวตแล้ว" : undefined}
-                  className="secondary-btn h-10 gap-2 px-4 text-xs disabled:cursor-not-allowed disabled:opacity-40"
+                  className="secondary-btn h-10 gap-2 px-4 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Pencil size={14} />
                   แก้ไข
@@ -368,7 +379,7 @@ export default function ProposalDetailPage({ params }) {
                   onClick={() => setShowCancelConfirm(true)}
                   disabled={!canManage || hasVotes}
                   title={hasVotes ? "ยกเลิกไม่ได้เนื่องจากมีผู้โหวตแล้ว" : undefined}
-                  className="inline-flex h-10 items-center gap-2 rounded-2xl border border-red-500/30 bg-red-500/5 px-4 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex h-10 items-center gap-2 rounded-2xl border border-red-500/30 bg-red-500/5 px-4 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Ban size={14} />
                   ยกเลิกข้อเสนอ
@@ -384,13 +395,13 @@ export default function ProposalDetailPage({ params }) {
               <h2 className="text-lg font-semibold text-white">ร่วมลงคะแนน</h2>
               <p className="mt-2 text-sm text-slate-400">
                 {address
-                  ? "การโหวตของคุณจะถูกบันทึกลง Smart Contract จริงบนเครือข่าย"
-                  : "กรุณาเชื่อมต่อกระเป๋าเพื่อลงคะแนนบน Smart Contract จริง"}
+                  ? "การโหวตของคุณจะถูกบันทึกลงสัญญาอัจฉริยะจริงบนเครือข่าย"
+                  : "กรุณาเชื่อมต่อกระเป๋าเพื่อลงคะแนนบนสัญญาอัจฉริยะจริง"}
               </p>
 
               <div className="mt-6 grid gap-4 sm:grid-cols-3">
                 <VoteButton
-                  label="YES"
+                  label="เห็นด้วย"
                   icon={CheckCircle2}
                   active={myVoteLabel === "yes"}
                   disabled={hasVoted || isVoting || !canVote}
@@ -398,7 +409,7 @@ export default function ProposalDetailPage({ params }) {
                   color="emerald"
                 />
                 <VoteButton
-                  label="NO"
+                  label="ไม่เห็นด้วย"
                   icon={XCircle}
                   active={myVoteLabel === "no"}
                   disabled={hasVoted || isVoting || !canVote}
@@ -406,7 +417,7 @@ export default function ProposalDetailPage({ params }) {
                   color="red"
                 />
                 <VoteButton
-                  label="ABSTAIN"
+                  label="งดออกเสียง"
                   icon={MinusCircle}
                   active={myVoteLabel === "abstain"}
                   disabled={hasVoted || isVoting || !canVote}
@@ -418,7 +429,7 @@ export default function ProposalDetailPage({ params }) {
               {isVoting && (
                 <div className="mt-5 flex items-center gap-2 text-sm text-blue-400">
                   <Loader2 size={16} className="animate-spin" />
-                  กำลังส่งธุรกรรมไปยัง Smart Contract...
+                  กำลังส่งธุรกรรมไปยังสัญญาอัจฉริยะ...
                 </div>
               )}
 
@@ -432,7 +443,7 @@ export default function ProposalDetailPage({ params }) {
               {hasVoted && !isVoting && (
                 <div className="mt-5 flex items-center gap-2 text-sm text-emerald-400">
                   <CheckCircle2 size={16} />
-                  บันทึกคะแนนของคุณเรียบร้อยแล้ว ({myVoteLabel?.toUpperCase()})
+                  บันทึกคะแนนของคุณเรียบร้อยแล้ว ({myVoteLabelText})
                 </div>
               )}
 
@@ -452,21 +463,21 @@ export default function ProposalDetailPage({ params }) {
 
               <div className="mt-6 space-y-6">
                 <ResultBar
-                  label="YES"
+                  label="เห็นด้วย"
                   count={votes.yes}
                   percent={pct(votes.yes)}
                   color="bg-emerald-500"
                   textColor="text-emerald-400"
                 />
                 <ResultBar
-                  label="NO"
+                  label="ไม่เห็นด้วย"
                   count={votes.no}
                   percent={pct(votes.no)}
                   color="bg-red-500"
                   textColor="text-red-400"
                 />
                 <ResultBar
-                  label="ABSTAIN"
+                  label="งดออกเสียง"
                   count={votes.abstain}
                   percent={pct(votes.abstain)}
                   color="bg-slate-400"
@@ -475,7 +486,7 @@ export default function ProposalDetailPage({ params }) {
               </div>
 
               <p className="mt-6 text-sm text-slate-400">
-                รวมทั้งหมด {total.toLocaleString()} Votes
+                รวมทั้งหมด {total.toLocaleString()} โหวต
               </p>
             </div>
           </div>

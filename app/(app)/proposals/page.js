@@ -13,9 +13,9 @@ export default function ProposalsPage() {
 
       <div className="container max-w-7xl">
         <PageHeader
-          eyebrow="Governance Proposals"
+          eyebrow="ข้อเสนอระบบการลงคะแนน"
           title="ข้อเสนอทั้งหมด"
-          subtitle="ติดตามและร่วมลงคะแนนในข้อเสนอทั้งหมดของระบบ Governance พร้อมตรวจสอบสถานะและความคืบหน้าได้แบบเรียลไทม์"
+          subtitle="ติดตามและร่วมลงคะแนนในข้อเสนอทั้งหมดของระบบการลงคะแนน พร้อมตรวจสอบสถานะและความคืบหน้าได้แบบเรียลไทม์"
         />
 
         <ProposalsExplorer />

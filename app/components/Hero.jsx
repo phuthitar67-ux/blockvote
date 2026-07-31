@@ -53,7 +53,7 @@ export default function Hero() {
 
                             <span className="text-xs font-medium tracking-[0.15em] uppercase text-blue-300">
 
-                                Active Proposals : {platformStats.activeProposals}
+                                ข้อเสนอที่กำลังเปิดโหวต : {platformStats.activeProposals}
 
                             </span>
 
@@ -75,7 +75,7 @@ export default function Hero() {
 
                             <br />
 
-                            Governance
+                            ระบบการลงคะแนน
 
                         </h1>
 
@@ -96,7 +96,7 @@ export default function Hero() {
                             <button
                                 onClick={connect}
                                 disabled={isConnecting || !!address}
-                                className="primary-btn px-7 py-3 text-base disabled:cursor-not-allowed disabled:opacity-80"
+                                className="primary-btn px-7 py-3 text-base disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {isConnecting ? (
                                     <>

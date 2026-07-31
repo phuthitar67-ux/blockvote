@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Menu, AlertTriangle } from "lucide-react";
@@ -13,10 +13,12 @@ export default function AppShell({ children }) {
   const { isConfigured } = useGovernance();
   const { isWrongNetwork, switchNetwork } = useWallet();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [prevPathname, setPrevPathname] = useState(pathname);
 
-  useEffect(() => {
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname);
     setMobileOpen(false);
-  }, [pathname]);
+  }
 
   return (
     <div className="flex min-h-screen bg-[#060816]">
@@ -53,7 +55,7 @@ export default function AppShell({ children }) {
         {!isConfigured ? (
           <div className="flex items-center gap-2 border-b border-amber-500/20 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-300 sm:px-6">
             <AlertTriangle size={14} className="shrink-0" />
-            ยังไม่ได้ตั้งค่า Smart Contract — deploy แล้วใส่ address ใน .env.local (ดู .env.example)
+            ยังไม่ได้ตั้งค่าสัญญาอัจฉริยะ — deploy แล้วใส่ address ใน .env.local (ดู .env.example)
           </div>
         ) : (
           isWrongNetwork && (

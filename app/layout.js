@@ -4,7 +4,7 @@ import { GovernanceProvider } from "@/lib/GovernanceContext";
 import { ToastProvider } from "@/lib/ToastContext";
 
 export const metadata = {
-  title: "ระบบลงคะแนน Blockchain Governance",
+  title: "ระบบลงคะแนนเสียงบน Blockchain",
   description:
     "ระบบลงคะแนนเสียงบน Blockchain ที่มีความปลอดภัย โปร่งใส และตรวจสอบได้",
   icons: {

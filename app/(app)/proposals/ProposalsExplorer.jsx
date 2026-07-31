@@ -12,11 +12,24 @@ import {
   StopCircle,
   Ban,
   PlusCircle,
+  Inbox,
 } from "lucide-react";
 import { useGovernance } from "@/lib/GovernanceContext";
 import { useWallet } from "@/lib/WalletContext";
 import { getYesPercent, getVoteTotal } from "@/lib/web3/format";
 import { statusLabels, categoryColors } from "@/lib/uiConstants";
+
+// Display-only Thai labels for the on-chain category values. The raw
+// English value in item.category is left untouched — it's what filtering
+// and future writes to the contract rely on.
+const CATEGORY_LABELS = {
+  Protocol: "โปรโตคอล",
+  DeFi: "การเงิน DeFi",
+  Treasury: "คลังทุน",
+  "DAO Ops": "การบริหาร",
+  Grants: "ทุนสนับสนุน",
+  Security: "ความปลอดภัย",
+};
 
 const statusIcon = {
   active: Clock3,
@@ -27,20 +40,20 @@ const statusIcon = {
 };
 
 const FILTERS = [
-  { key: "all", label: "All" },
-  { key: "active", label: "Active" },
-  { key: "ended", label: "Ended" },
-  { key: "cancelled", label: "Cancelled" },
-  { key: "mine", label: "My Proposal" },
+  { key: "all", label: "ทั้งหมด" },
+  { key: "active", label: "กำลังโหวต" },
+  { key: "ended", label: "ปิดโหวตแล้ว" },
+  { key: "cancelled", label: "ยกเลิกแล้ว" },
+  { key: "mine", label: "ข้อเสนอของฉัน" },
 ];
 
 const SORTS = [
-  { key: "newest", label: "Newest" },
-  { key: "oldest", label: "Oldest" },
-  { key: "most-votes", label: "Most Votes" },
-  { key: "least-votes", label: "Least Votes" },
-  { key: "title-asc", label: "Title A-Z" },
-  { key: "title-desc", label: "Title Z-A" },
+  { key: "newest", label: "ใหม่ล่าสุด" },
+  { key: "oldest", label: "เก่าที่สุด" },
+  { key: "most-votes", label: "โหวตมากที่สุด" },
+  { key: "least-votes", label: "โหวตน้อยที่สุด" },
+  { key: "title-asc", label: "ชื่อ (A-Z)" },
+  { key: "title-desc", label: "ชื่อ (Z-A)" },
 ];
 
 function SkeletonCard() {
@@ -67,11 +80,16 @@ function SkeletonCard() {
 function EmptyState() {
   return (
     <div className="fade-up flex flex-col items-center justify-center rounded-[32px] border border-white/10 bg-[#111725] py-20 text-center">
-      <span className="text-5xl">📭</span>
-      <p className="mt-4 text-sm text-slate-400">No proposals found.</p>
+      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/5 text-slate-400">
+        <Inbox size={24} />
+      </span>
+      <p className="mt-5 text-base font-semibold text-white">ไม่พบข้อเสนอ</p>
+      <p className="mt-1.5 max-w-xs text-sm text-slate-400">
+        ลองเปลี่ยนตัวกรองหรือคำค้นหา หรือสร้างข้อเสนอใหม่ได้เลย
+      </p>
       <Link href="/create-proposal" className="primary-btn mt-6 h-11 gap-2 px-6 text-sm">
         <PlusCircle size={16} />
-        Create Proposal
+        สร้างข้อเสนอ
       </Link>
     </div>
   );
@@ -203,7 +221,7 @@ export default function ProposalsExplorer() {
             const StatusIcon = statusIcon[item.status];
             const categoryColor = categoryColors[item.category] ?? "#94a3b8";
             const winningSide =
-              item.votesYes === item.votesNo ? "Tie" : item.votesYes > item.votesNo ? "YES" : "NO";
+              item.votesYes === item.votesNo ? "เสมอ" : item.votesYes > item.votesNo ? "เห็นด้วย" : "ไม่เห็นด้วย";
 
             return (
               <div
@@ -214,22 +232,22 @@ export default function ProposalsExplorer() {
                 {/* Header */}
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-blue-500/10 px-3 py-1 text-[11px] font-semibold text-blue-400">
+                    <span className="pill bg-blue-500/10 text-blue-400">
                       #{item.id}
                     </span>
                     <span
-                      className="rounded-full px-3 py-1 text-[11px] font-semibold"
+                      className="pill"
                       style={{
                         color: categoryColor,
                         backgroundColor: `${categoryColor}1A`,
                       }}
                     >
-                      {item.category}
+                      {CATEGORY_LABELS[item.category] ?? item.category}
                     </span>
                   </div>
 
                   <span
-                    className={`flex items-center gap-2 text-[11px] font-medium ${status.color}`}
+                    className={`pill bg-white/5 ${status.color}`}
                   >
                     <StatusIcon size={14} />
                     {status.text}
@@ -263,11 +281,11 @@ export default function ProposalsExplorer() {
 
                   <div className="mt-3 flex items-center justify-between text-[11px] text-slate-400">
                     <span>
-                      <span className="text-emerald-400">YES</span> {item.votesYes.toLocaleString()} ·{" "}
-                      <span className="text-red-400">NO</span> {item.votesNo.toLocaleString()}
+                      <span className="text-emerald-400">เห็นด้วย</span> {item.votesYes.toLocaleString()} ·{" "}
+                      <span className="text-red-400">ไม่เห็นด้วย</span> {item.votesNo.toLocaleString()}
                     </span>
                     <span className="font-medium text-slate-300">
-                      Winning: <span className="text-white">{winningSide}</span>
+                      ผลชนะ: <span className="text-white">{winningSide}</span>
                     </span>
                   </div>
                 </div>
@@ -277,7 +295,7 @@ export default function ProposalsExplorer() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-semibold text-white">
-                        {totalVotes.toLocaleString()} Votes
+                        {totalVotes.toLocaleString()} โหวต
                       </p>
 
                       <div className="mt-2 flex items-center gap-2 text-xs font-medium text-amber-400">
@@ -292,7 +310,7 @@ export default function ProposalsExplorer() {
                           href={`/proposal/${item.id}`}
                           className="primary-btn h-9 px-4 text-xs"
                         >
-                          Vote Now
+                          โหวตเลย
                         </Link>
                       )}
 
@@ -300,7 +318,7 @@ export default function ProposalsExplorer() {
                         href={`/proposal/${item.id}`}
                         className="group flex items-center gap-1.5 text-xs font-medium text-slate-400 transition-colors hover:text-white"
                       >
-                        Details
+                        รายละเอียด
                         <ArrowRight
                           size={13}
                           className="transition-transform duration-300 group-hover:translate-x-1"

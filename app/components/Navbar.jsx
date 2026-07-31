@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Wallet, LogOut, Loader2, Menu, X } from "lucide-react";
@@ -15,11 +15,13 @@ export default function Navbar() {
     const { address, balanceEth, isConnecting, error, connect, disconnect } = useWallet();
     const [menuOpen, setMenuOpen] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [prevPathname, setPrevPathname] = useState(pathname);
 
-    useEffect(() => {
+    if (pathname !== prevPathname) {
+        setPrevPathname(pathname);
         setMobileOpen(false);
         setMenuOpen(false);
-    }, [pathname]);
+    }
 
     const menus = [
         { label: "หน้าแรก", href: "/" },
@@ -110,7 +112,7 @@ export default function Navbar() {
                         <button
                             onClick={connect}
                             disabled={isConnecting}
-                            className="primary-btn text-sm disabled:cursor-not-allowed disabled:opacity-70"
+                            className="primary-btn text-sm disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {isConnecting ? (
                                 <>
@@ -128,7 +130,7 @@ export default function Navbar() {
 
                     {address && menuOpen && (
                         <div className="absolute right-0 top-[calc(100%+10px)] w-64 rounded-2xl border border-white/10 bg-[#101625] p-4 shadow-xl shadow-black/40">
-                            <p className="text-xs text-slate-400">Wallet Address</p>
+                            <p className="text-xs text-slate-400">ที่อยู่กระเป๋า</p>
                             <p className="mt-1 break-all font-mono text-sm text-white">
                                 {address}
                             </p>

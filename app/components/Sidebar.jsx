@@ -16,12 +16,12 @@ import { useWallet } from "@/lib/WalletContext";
 import { useGovernance } from "@/lib/GovernanceContext";
 
 const NAV_ITEMS = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Proposals", href: "/proposals", icon: Vote },
-  { label: "Create Proposal", href: "/create-proposal", icon: PlusCircle },
-  { label: "Buy Tokens", href: "/buy-tokens", icon: ShoppingCart },
-  { label: "Results", href: "/results", icon: BarChart3 },
-  { label: "Profile", href: "/profile", icon: User },
+  { label: "แดชบอร์ด", href: "/dashboard", icon: LayoutDashboard },
+  { label: "ข้อเสนอ", href: "/proposals", icon: Vote },
+  { label: "สร้างข้อเสนอ", href: "/create-proposal", icon: PlusCircle },
+  { label: "ซื้อโทเคน", href: "/buy-tokens", icon: ShoppingCart },
+  { label: "ผลการลงคะแนน", href: "/results", icon: BarChart3 },
+  { label: "โปรไฟล์", href: "/profile", icon: User },
 ];
 
 function shortenAddress(addr) {
@@ -107,13 +107,13 @@ export default function Sidebar({ mobileOpen, onClose }) {
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
               <div className="flex items-center gap-2 text-xs font-medium text-emerald-400">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                CONNECTED
+                เชื่อมต่อแล้ว
               </div>
               <p className="mt-2 truncate font-mono text-sm text-white">
                 {shortenAddress(address)}
               </p>
               <p className="mt-1 text-xs text-slate-400">
-                Balance{" "}
+                ยอดคงเหลือ{" "}
                 <span className="text-white">
                   {tokenBalance.toLocaleString()} GOV
                 </span>
@@ -123,7 +123,7 @@ export default function Sidebar({ mobileOpen, onClose }) {
             <button
               onClick={connect}
               disabled={isConnecting}
-              className="primary-btn w-full text-sm disabled:cursor-not-allowed disabled:opacity-70"
+              className="primary-btn w-full text-sm disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isConnecting ? (
                 <>

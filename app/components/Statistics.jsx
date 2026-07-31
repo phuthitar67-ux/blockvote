@@ -28,7 +28,7 @@ export default function Statistics() {
     {
       icon: "◈",
       value: formatCompact(platformStats.governanceTokens),
-      label: "Governance Token",
+      label: "โทเคน GOV",
       color: "text-amber-400",
     },
   ];

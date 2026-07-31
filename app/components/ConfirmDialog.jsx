@@ -26,7 +26,7 @@ export default function ConfirmDialog({
             type="button"
             onClick={onCancel}
             disabled={loading}
-            className="secondary-btn h-11 px-6 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+            className="secondary-btn h-11 px-6 text-sm disabled:cursor-not-allowed disabled:opacity-50"
           >
             {cancelLabel}
           </button>
@@ -34,7 +34,7 @@ export default function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={loading}
-            className={`inline-flex h-11 items-center justify-center gap-2 rounded-2xl px-6 text-sm font-semibold text-white transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${
+            className={`inline-flex h-11 items-center justify-center gap-2 rounded-2xl px-6 text-sm font-semibold text-white transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-50 ${
               danger
                 ? "bg-red-500/20 border border-red-500/40 hover:bg-red-500/30"
                 : "primary-btn"

@@ -81,12 +81,6 @@ img {
   line-height: 1.8;
 }
 
-.gradient-text {
-  background: linear-gradient(135deg, var(--primary), var(--secondary));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -98,6 +92,104 @@ img {
   background: var(--surface-hover);
   border-color: rgba(91,108,255,.35);
   transform: translateY(-4px);
+}
+
+/* Shared status/category pill — consistent height, padding and icon gap
+   wherever a badge is used (proposal cards, tables, detail headers). */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Shared stat tile — used for every "big number + small label" card
+   (Dashboard, Buy Tokens, Profile, Results). */
+.stat-tile {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 1.5rem 1.25rem;
+  text-align: center;
+  transition: border-color .3s ease, transform .3s ease;
+}
+.stat-tile:hover {
+  transform: translateY(-2px);
+  border-color: rgba(91,108,255,.3);
+}
+.stat-tile .stat-tile-icon {
+  margin-bottom: .875rem;
+}
+.stat-tile .stat-tile-value {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+.stat-tile .stat-tile-label {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Shared empty state — icon + title + description, used whenever a list
+   or table has nothing to show yet. */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 3rem 1.5rem;
+  text-align: center;
+}
+.empty-state .empty-state-icon {
+  display: flex;
+  height: 44px;
+  width: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(255,255,255,.05);
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.empty-state .empty-state-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.empty-state .empty-state-desc {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  max-width: 32ch;
+}
+
+/* Shared data table — consistent header treatment + row hover across
+   every table in the app (Profile, Results). */
+.data-table th {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-secondary);
+}
+.data-table tbody tr {
+  transition: background-color .2s ease;
+}
+.data-table tbody tr:hover {
+  background: rgba(255,255,255,.03);
 }
 
 .primary-btn {
@@ -126,6 +218,28 @@ img {
 .primary-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 12px 28px rgba(91,108,255,.28);
+}
+
+.primary-btn:focus-visible,
+.secondary-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.primary-btn:disabled,
+.secondary-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.primary-btn:disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.secondary-btn:disabled:hover {
+  background: transparent;
+  border-color: var(--border);
 }
 
 .secondary-btn {
@@ -196,28 +310,6 @@ img {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #56627d;
-}
-.gradient-text {
-  background: linear-gradient(
-    90deg,
-    #60a5fa,
-    #818cf8,
-    #a78bfa
-  );
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-.gradient-text {
-  background: linear-gradient(
-    90deg,
-    #5ea2ff,
-    #6b7cff,
-    #8b5cf6
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
 }
 .gradient-text {
   background: linear-gradient(

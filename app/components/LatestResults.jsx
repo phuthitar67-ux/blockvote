@@ -54,7 +54,7 @@ export default function LatestResults() {
             <div
               key={item.title}
               style={{ animationDelay: `${index * 80}ms` }}
-              className="fade-up flex h-full flex-col rounded-[24px] border border-white/10 bg-[#111725] p-7 transition-all duration-300 hover:-translate-y-2 hover:border-blue-500/40 hover:shadow-[0_20px_50px_rgba(59,130,246,.15)]"
+              className="fade-up flex h-full flex-col rounded-[32px] border border-white/10 bg-[#111725] p-7 transition-all duration-300 hover:-translate-y-2 hover:border-blue-500/40 hover:shadow-[0_20px_50px_rgba(59,130,246,.15)]"
             >
 
               {/* Header */}
@@ -82,7 +82,7 @@ export default function LatestResults() {
 
                       <CheckCircle2 size={13} />
 
-                      <span>Completed</span>
+                      <span>สิ้นสุดแล้ว</span>
 
                     </div>
 
@@ -122,7 +122,7 @@ export default function LatestResults() {
                   <div className="rounded-2xl border border-white/5 bg-white/[0.04] py-4 text-center transition-all duration-300 hover:bg-white/[0.06]">
 
                     <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
-                      YES
+                      เห็นด้วย
                     </p>
 
                     <p className="mt-2 text-base font-bold text-emerald-400">
@@ -134,7 +134,7 @@ export default function LatestResults() {
                   <div className="rounded-2xl border border-white/5 bg-white/[0.04] py-4 text-center transition-all duration-300 hover:bg-white/[0.06]">
 
                     <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
-                      NO
+                      ไม่เห็นด้วย
                     </p>
 
                     <p className="mt-2 text-base font-bold text-red-400">
@@ -146,7 +146,7 @@ export default function LatestResults() {
                   <div className="rounded-2xl border border-white/5 bg-white/[0.04] py-4 text-center transition-all duration-300 hover:bg-white/[0.06]">
 
                     <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
-                      ABSTAIN
+                      งดออกเสียง
                     </p>
 
                     <p className="mt-2 text-base font-bold text-amber-400">
