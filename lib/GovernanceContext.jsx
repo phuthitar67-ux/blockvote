@@ -18,6 +18,7 @@ import {
   GOVERNANCE_ABI,
   GOVERNANCE_ADDRESS,
   IS_CONFIGURED,
+  PROPOSAL_STATE,
   RPC_URL,
   VOTE_TYPE,
 } from "@/lib/web3/config";
@@ -104,8 +105,8 @@ const RETRY_BASE_DELAY_MS = 500;
 // request itself didn't get through" (dropped connection, RPC overloaded).
 function isRetryableRpcError(err) {
   if (err?.code === "NETWORK_ERROR" || err?.code === "SERVER_ERROR" || err?.code === "TIMEOUT") return true;
-  if (err?.error?.code === 429) return true;
-  const message = err?.error?.message || err?.shortMessage || err?.message || "";
+  if (err?.error?.code === 429 || err?.info?.error?.code === 429) return true;
+  const message = err?.error?.message || err?.info?.error?.message || err?.shortMessage || err?.message || "";
   return /failed to fetch|network ?error|rate limit|too many requests|compute units per second/i.test(message);
 }
 
@@ -184,7 +185,10 @@ async function queryFilterChunked(contract, filter, fromBlock, toBlock) {
       if (err.error?.code === 429 || /compute units per second|rate limit/i.test(message)) {
         rateLimitRetries += 1;
         if (rateLimitRetries > MAX_RPC_RETRIES) {
-          console.error(
+          // Caught by the caller's outer scan handler, which already falls
+          // back to a safe default (empty/stale list) — not a crash, so this
+          // doesn't need error-level severity.
+          console.warn(
             `[BlockVote] queryFilterChunked: still rate limited after ${MAX_RPC_RETRIES} retries, giving up:`,
             message
           );
@@ -202,7 +206,9 @@ async function queryFilterChunked(contract, filter, fromBlock, toBlock) {
       if (suggestedRange) {
         chunkSize = parseInt(suggestedRange[2], 16) - parseInt(suggestedRange[1], 16) + 1;
       } else if (chunkSize === 1) {
-        console.error("[BlockVote] queryFilterChunked: RPC rejects even single-block ranges, giving up:", err);
+        // Same as above — the caller's outer scan handler already recovers
+        // with a safe default, so this is a warning, not a crash.
+        console.warn("[BlockVote] queryFilterChunked: RPC rejects even single-block ranges, giving up:", err);
         throw err;
       } else {
         chunkSize = Math.max(1, Math.ceil(chunkSize / 2));
@@ -371,15 +377,18 @@ export function GovernanceProvider({ children }) {
   }, [readGovernance, readGovToken]);
 
   useEffect(() => {
-    refreshTokenomics().catch((err) => console.error("refreshTokenomics failed:", err));
+    // withRetry already exhausted its own retries before this rejects — the
+    // next action that calls refreshTokenomics() again will retry it, so
+    // this doesn't need error-level severity.
+    refreshTokenomics().catch((err) => console.warn("refreshTokenomics failed:", err));
   }, [refreshTokenomics]);
 
   useEffect(() => {
-    refreshProposals().catch((err) => console.error("refreshProposals failed:", err));
+    refreshProposals().catch((err) => console.warn("refreshProposals failed:", err));
   }, [refreshProposals]);
 
   useEffect(() => {
-    refreshBalance().catch((err) => console.error("refreshBalance failed:", err));
+    refreshBalance().catch((err) => console.warn("refreshBalance failed:", err));
   }, [refreshBalance]);
 
   useEffect(() => {
@@ -397,7 +406,7 @@ export function GovernanceProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    refreshMyVotes(proposals).catch((err) => console.error("[BlockVote] refreshMyVotes failed:", err));
+    refreshMyVotes(proposals).catch((err) => console.warn("[BlockVote] refreshMyVotes failed:", err));
   }, [proposals, refreshMyVotes]);
 
   useEffect(() => {
@@ -515,17 +524,16 @@ export function GovernanceProvider({ children }) {
       const fromBlock = await blockNumberBeforeCached(earliestStart, latestBlock);
       const toBlock = latestBlock;
 
-      const [voteEvents, updateEvents, endEvents, cancelEvents] = await mapWithConcurrency(
-        [
-          readGovernance.filters.VoteCast(),
-          readGovernance.filters.ProposalUpdated(),
-          readGovernance.filters.ProposalEnded(),
-          readGovernance.filters.ProposalCancelled(),
-        ],
-        RPC_CONCURRENCY,
-        (filter) => queryFilterChunked(readGovernance, filter, fromBlock, toBlock)
-      );
+      // All four event types share the exact same [fromBlock, toBlock] range
+      // on the same contract — one wildcard queryFilter (matches every event,
+      // split locally by name below) replaces 4 separate eth_getLogs scans
+      // over the identical range.
+      const allGovernanceEvents = await queryFilterChunked(readGovernance, "*", fromBlock, toBlock);
       if (cancelled) return;
+      const voteEvents = allGovernanceEvents.filter((e) => e.fragment?.name === "VoteCast");
+      const updateEvents = allGovernanceEvents.filter((e) => e.fragment?.name === "ProposalUpdated");
+      const endEvents = allGovernanceEvents.filter((e) => e.fragment?.name === "ProposalEnded");
+      const cancelEvents = allGovernanceEvents.filter((e) => e.fragment?.name === "ProposalCancelled");
 
       setAllVoteEvents(voteEvents);
 
@@ -622,7 +630,10 @@ export function GovernanceProvider({ children }) {
         );
       }
     })().catch((err) => {
-      console.error("[BlockVote] activity/voters scan failed:", err);
+      // Already recovered below (safe defaults) — the next successful
+      // proposals-triggered scan will repopulate this, so this doesn't need
+      // error-level severity.
+      console.warn("[BlockVote] activity/voters scan failed:", err);
       if (!cancelled) {
         setTotalVoters(0);
         setTopVoters([]);
@@ -658,15 +669,20 @@ export function GovernanceProvider({ children }) {
       // of empty blocks that previously had to be chunked/retried through
       // on every mount.
       const fromBlock = await blockNumberBeforeCached(DEPLOYED_AT, latestBlock);
-      const [[purchaseEvents, mintEvents], initialSupply] = await Promise.all([
-        mapWithConcurrency(
-          [readGovToken.filters.TokensPurchased(), readGovToken.filters.Transfer(ZeroAddress)],
-          RPC_CONCURRENCY,
-          (filter) => queryFilterChunked(readGovToken, filter, fromBlock, latestBlock)
-        ),
+      // TokensPurchased and Transfer both live on this contract over the same
+      // [fromBlock, latestBlock] range — one wildcard scan replaces 2 separate
+      // eth_getLogs calls; the from===ZeroAddress mint filter (previously done
+      // server-side via filters.Transfer(ZeroAddress)) is applied client-side
+      // on the combined result instead.
+      const [allTokenEvents, initialSupply] = await Promise.all([
+        queryFilterChunked(readGovToken, "*", fromBlock, latestBlock),
         readGovToken.INITIAL_SUPPLY(),
       ]);
       if (cancelled) return;
+      const purchaseEvents = allTokenEvents.filter((e) => e.fragment?.name === "TokensPurchased");
+      const mintEvents = allTokenEvents.filter(
+        (e) => e.fragment?.name === "Transfer" && e.args.from === ZeroAddress
+      );
 
       const purchaseTxHashes = new Set(purchaseEvents.map((e) => e.transactionHash));
       const claimEvents = mintEvents.filter(
@@ -698,7 +714,9 @@ export function GovernanceProvider({ children }) {
       });
       if (!cancelled) setTokenActivity(entries);
     })().catch((err) => {
-      console.error("[BlockVote] token activity scan failed:", err);
+      // Already recovered below (empty list) — retried on the next mount, so
+      // this doesn't need error-level severity.
+      console.warn("[BlockVote] token activity scan failed:", err);
       if (!cancelled) setTokenActivity([]);
     });
 
@@ -858,6 +876,62 @@ export function GovernanceProvider({ children }) {
         console.error("[BlockVote] createProposal() reverted:", describeTxError(err), err);
         throw err;
       }
+
+      // ProposalCreated from this tx's own receipt already has everything
+      // needed to show the new proposal immediately, without waiting on a
+      // fresh eth_getLogs scan; refreshProposals() below still runs as the
+      // authoritative reconciliation pass, unchanged.
+      const createdLog = receipt.logs
+        .map((log) => {
+          try {
+            return governance.interface.parseLog(log);
+          } catch {
+            return null;
+          }
+        })
+        .find((parsed) => parsed?.name === "ProposalCreated");
+      if (createdLog) {
+        const {
+          id: newId,
+          creator,
+          title: emittedTitle,
+          category: emittedCategory,
+          startTime,
+          endTime,
+        } = createdLog.args;
+        const proposal = normalizeProposal(
+          {
+            id: newId,
+            creator,
+            title: emittedTitle,
+            description,
+            category: emittedCategory,
+            startTime,
+            endTime,
+            votesYes: 0n,
+            votesNo: 0n,
+            votesAbstain: 0n,
+          },
+          PROPOSAL_STATE.Active
+        );
+        setProposals((prev) => [proposal, ...prev]);
+        setRecentActivity((prev) =>
+          [
+            {
+              id: `created-${proposal.id}`,
+              type: "created",
+              proposalId: proposal.id,
+              proposalTitle: proposal.title,
+              actor: proposal.creator,
+              timestamp: proposal.startTime,
+            },
+            ...prev,
+          ]
+            .sort((a, b) => b.timestamp - a.timestamp)
+            .slice(0, 50)
+        );
+      }
+
       try {
         await refreshProposals();
       } catch (err) {
@@ -880,22 +954,69 @@ export function GovernanceProvider({ children }) {
         tokenBalance,
         alreadyVoted: myVotes[id],
       });
+      let receipt;
       try {
         const tx = await governance.castVote(id, support);
         console.log("[BlockVote] castVote() tx sent:", tx.hash);
-        const receipt = await tx.wait();
+        receipt = await tx.wait();
         console.log("[BlockVote] castVote() confirmed:", receipt.hash, "status:", receipt.status);
       } catch (err) {
         console.error("[BlockVote] castVote() reverted:", describeTxError(err), err);
         throw err;
       }
+
+      // The VoteCast this transaction just emitted is already in the receipt
+      // — apply it to local state immediately so Proposal State / Vote
+      // History reflect the vote without waiting on a fresh eth_getLogs scan.
+      // The refresh calls below still run afterward as the authoritative
+      // reconciliation pass, unchanged.
+      const voteCastLog = receipt.logs
+        .map((log) => {
+          try {
+            return governance.interface.parseLog(log);
+          } catch {
+            return null;
+          }
+        })
+        .find((parsed) => parsed?.name === "VoteCast");
+      if (voteCastLog) {
+        const { id: votedId, voter, support: castSupport, weight } = voteCastLog.args;
+        const proposalId = Number(votedId);
+        const supportNum = Number(castSupport);
+        const weightNum = Math.round(Number(formatEther(weight)));
+        setProposals((prev) =>
+          prev.map((p) => {
+            if (p.id !== proposalId) return p;
+            if (supportNum === VOTE_TYPE.Yes) return { ...p, votesYes: p.votesYes + weightNum };
+            if (supportNum === VOTE_TYPE.No) return { ...p, votesNo: p.votesNo + weightNum };
+            if (supportNum === VOTE_TYPE.Abstain) return { ...p, votesAbstain: p.votesAbstain + weightNum };
+            return p;
+          })
+        );
+        setMyVotes((prev) => ({ ...prev, [proposalId]: supportNum }));
+        setRecentActivity((prev) => {
+          const voteLabel = { [VOTE_TYPE.Yes]: "YES", [VOTE_TYPE.No]: "NO", [VOTE_TYPE.Abstain]: "ABSTAIN" };
+          const proposal = proposals.find((p) => p.id === proposalId);
+          const entry = {
+            id: `vote-${proposalId}-${receipt.hash}`,
+            type: "vote",
+            proposalId,
+            proposalTitle: proposal?.title,
+            actor: voter,
+            detail: voteLabel[supportNum] ?? "UNKNOWN",
+            timestamp: Math.floor(Date.now() / 1000),
+          };
+          return [entry, ...prev].sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
+        });
+      }
+
       try {
-        await Promise.all([refreshProposals(), refreshBalance()]);
+        await Promise.all([refreshProposals(), refreshBalance(), refreshMyVotes(proposals)]);
       } catch (err) {
         console.warn("[BlockVote] castVote() confirmed but refresh failed:", err);
       }
     },
-    [getSignerContracts, refreshProposals, refreshBalance, address, tokenBalance, myVotes]
+    [getSignerContracts, refreshProposals, refreshBalance, refreshMyVotes, proposals, address, tokenBalance, myVotes]
   );
 
   const endProposal = useCallback(
@@ -918,6 +1039,40 @@ export function GovernanceProvider({ children }) {
         console.error("[BlockVote] endProposal() reverted:", describeTxError(err), err);
         throw err;
       }
+
+      // ProposalEnded from this tx's own receipt already tells us the id is
+      // now ended — flip it locally without waiting on a fresh eth_getLogs
+      // scan; refreshProposals() below still runs as the authoritative
+      // reconciliation pass, unchanged.
+      const endedLog = receipt.logs
+        .map((log) => {
+          try {
+            return governance.interface.parseLog(log);
+          } catch {
+            return null;
+          }
+        })
+        .find((parsed) => parsed?.name === "ProposalEnded");
+      if (endedLog) {
+        const { id: endedId, creator } = endedLog.args;
+        const proposalId = Number(endedId);
+        setProposals((prev) =>
+          prev.map((p) => (p.id === proposalId ? { ...p, status: "ended", remain: "สิ้นสุดแล้ว" } : p))
+        );
+        setRecentActivity((prev) => {
+          const proposal = proposals.find((p) => p.id === proposalId);
+          const entry = {
+            id: `end-${proposalId}-${receipt.hash}`,
+            type: "end",
+            proposalId,
+            proposalTitle: proposal?.title,
+            actor: creator,
+            timestamp: Math.floor(Date.now() / 1000),
+          };
+          return [entry, ...prev].sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
+        });
+      }
+
       try {
         await refreshProposals();
       } catch (err) {
@@ -925,7 +1080,7 @@ export function GovernanceProvider({ children }) {
       }
       return receipt.hash;
     },
-    [getSignerContracts, refreshProposals, address]
+    [getSignerContracts, refreshProposals, proposals, address]
   );
 
   const updateProposal = useCallback(
@@ -978,6 +1133,40 @@ export function GovernanceProvider({ children }) {
         console.error("[BlockVote] cancelProposal() reverted:", describeTxError(err), err);
         throw err;
       }
+
+      // ProposalCancelled from this tx's own receipt already tells us the id
+      // is now cancelled — flip it locally without waiting on a fresh
+      // eth_getLogs scan; refreshProposals() below still runs as the
+      // authoritative reconciliation pass, unchanged.
+      const cancelledLog = receipt.logs
+        .map((log) => {
+          try {
+            return governance.interface.parseLog(log);
+          } catch {
+            return null;
+          }
+        })
+        .find((parsed) => parsed?.name === "ProposalCancelled");
+      if (cancelledLog) {
+        const { id: cancelledId, creator } = cancelledLog.args;
+        const proposalId = Number(cancelledId);
+        setProposals((prev) =>
+          prev.map((p) => (p.id === proposalId ? { ...p, status: "cancelled", remain: "สิ้นสุดแล้ว" } : p))
+        );
+        setRecentActivity((prev) => {
+          const proposal = proposals.find((p) => p.id === proposalId);
+          const entry = {
+            id: `cancel-${proposalId}-${receipt.hash}`,
+            type: "cancel",
+            proposalId,
+            proposalTitle: proposal?.title,
+            actor: creator,
+            timestamp: Math.floor(Date.now() / 1000),
+          };
+          return [entry, ...prev].sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
+        });
+      }
+
       try {
         await refreshProposals();
       } catch (err) {
@@ -985,7 +1174,7 @@ export function GovernanceProvider({ children }) {
       }
       return receipt.hash;
     },
-    [getSignerContracts, refreshProposals, address]
+    [getSignerContracts, refreshProposals, proposals, address]
   );
 
   const getCreationTxHash = useCallback(

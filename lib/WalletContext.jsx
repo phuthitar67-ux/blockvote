@@ -86,12 +86,12 @@ export function WalletProvider({ children }) {
     window.ethereum
       .request({ method: "eth_accounts" })
       .then((accounts) => {
-        if (accounts[0]) loadAccountData(accounts[0]);
+        if (accounts[0]) return loadAccountData(accounts[0]);
       })
       .catch(() => {});
 
     const handleAccountsChanged = (accounts) => {
-      if (accounts[0]) loadAccountData(accounts[0]);
+      if (accounts[0]) loadAccountData(accounts[0]).catch(() => {});
       else disconnect();
     };
     const handleChainChanged = (hexChainId) => {
@@ -99,7 +99,7 @@ export function WalletProvider({ children }) {
       window.ethereum
         .request({ method: "eth_accounts" })
         .then((accounts) => {
-          if (accounts[0]) loadAccountData(accounts[0]);
+          if (accounts[0]) return loadAccountData(accounts[0]);
         })
         .catch(() => {});
     };
