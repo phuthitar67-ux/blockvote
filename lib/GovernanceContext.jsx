@@ -12,6 +12,7 @@ import { BrowserProvider, Contract, JsonRpcProvider, ZeroAddress, formatEther, p
 import { useWallet } from "@/lib/WalletContext";
 import {
   CHAIN_ID,
+  DEPLOYED_AT,
   GOV_TOKEN_ABI,
   GOV_TOKEN_ADDRESS,
   GOVERNANCE_ABI,
@@ -95,6 +96,59 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const MAX_RPC_RETRIES = 5;
+const RETRY_BASE_DELAY_MS = 500;
+
+// Matches only transient/network-layer failures — a rejected transaction or
+// a genuine "no such proposal" revert must never be retried, only "the
+// request itself didn't get through" (dropped connection, RPC overloaded).
+function isRetryableRpcError(err) {
+  if (err?.code === "NETWORK_ERROR" || err?.code === "SERVER_ERROR" || err?.code === "TIMEOUT") return true;
+  if (err?.error?.code === 429) return true;
+  const message = err?.error?.message || err?.shortMessage || err?.message || "";
+  return /failed to fetch|network ?error|rate limit|too many requests|compute units per second/i.test(message);
+}
+
+// Retries a read with exponential backoff, but only for the transient
+// failures above — anything else (a real revert, a bad argument) throws
+// immediately on the first attempt, same as before this existed.
+async function withRetry(fn) {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await fn();
+    } catch (err) {
+      attempt += 1;
+      if (attempt > MAX_RPC_RETRIES || !isRetryableRpcError(err)) throw err;
+      const delay = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+      console.warn(
+        `[BlockVote] RPC read failed (attempt ${attempt}/${MAX_RPC_RETRIES}), retrying in ${delay}ms:`,
+        err?.message || err
+      );
+      await sleep(delay);
+    }
+  }
+}
+
+// Runs fn over items with at most `limit` requests in flight at once —
+// still parallel (fast), just bounded, so a large proposal/voter count
+// can't burst hundreds of simultaneous requests at the RPC provider.
+async function mapWithConcurrency(items, limit, fn) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  async function worker() {
+    while (true) {
+      const current = nextIndex++;
+      if (current >= items.length) return;
+      results[current] = await fn(items[current], current);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+const RPC_CONCURRENCY = 5;
+
 // eth_getLogs block-range limits vary wildly by RPC provider and are never
 // known up front — PublicNode rejects any range reaching more than ~1,000
 // blocks into the past as an "archive" request, while Alchemy's free tier
@@ -106,21 +160,42 @@ function sleep(ms) {
 // it gives one (Alchemy does), otherwise shrink geometrically; back off
 // without shrinking on rate-limit errors, since those aren't a range
 // problem and would otherwise be misread as one.
+const INITIAL_CHUNK_SIZE = 10; // Alchemy free tier's hard eth_getLogs range cap
+const MAX_CHUNK_SIZE = 2000;
+
 async function queryFilterChunked(contract, filter, fromBlock, toBlock) {
   const events = [];
-  let chunkSize = Math.max(1, toBlock - fromBlock + 1);
+  let chunkSize = Math.min(INITIAL_CHUNK_SIZE, Math.max(1, toBlock - fromBlock + 1));
   let start = fromBlock;
+  let rateLimitRetries = 0;
   while (start <= toBlock) {
     const end = Math.min(start + chunkSize - 1, toBlock);
     try {
       events.push(...(await contract.queryFilter(filter, start, end)));
       start = end + 1;
+      rateLimitRetries = 0;
+      // Grow on repeated success so a large range doesn't stay pinned at the
+      // smallest safe window for its entire scan — but never guess past a
+      // size the RPC hasn't already accepted.
+      chunkSize = Math.min(chunkSize * 2, MAX_CHUNK_SIZE, Math.max(1, toBlock - start + 1));
       await sleep(100);
     } catch (err) {
       const message = err.error?.message || err.shortMessage || err.message || "";
       if (err.error?.code === 429 || /compute units per second|rate limit/i.test(message)) {
-        console.warn("[BlockVote] queryFilterChunked: rate limited, backing off:", message);
-        await sleep(1000);
+        rateLimitRetries += 1;
+        if (rateLimitRetries > MAX_RPC_RETRIES) {
+          console.error(
+            `[BlockVote] queryFilterChunked: still rate limited after ${MAX_RPC_RETRIES} retries, giving up:`,
+            message
+          );
+          throw err;
+        }
+        const delay = 1000 * 2 ** (rateLimitRetries - 1);
+        console.warn(
+          `[BlockVote] queryFilterChunked: rate limited, backing off (attempt ${rateLimitRetries}/${MAX_RPC_RETRIES}, ${delay}ms):`,
+          message
+        );
+        await sleep(delay);
         continue;
       }
       const suggestedRange = message.match(/\[0x([0-9a-f]+),\s*0x([0-9a-f]+)\]/i);
@@ -130,7 +205,7 @@ async function queryFilterChunked(contract, filter, fromBlock, toBlock) {
         console.error("[BlockVote] queryFilterChunked: RPC rejects even single-block ranges, giving up:", err);
         throw err;
       } else {
-        chunkSize = Math.max(1, Math.floor(chunkSize / 10));
+        chunkSize = Math.max(1, Math.ceil(chunkSize / 2));
       }
       console.warn(
         `[BlockVote] queryFilterChunked: range ${start}-${end} rejected by RPC, retrying with window of ${chunkSize} blocks`,
@@ -210,16 +285,20 @@ export function GovernanceProvider({ children }) {
     }
     setLoadingProposals(true);
     try {
-      const count = Number(await readGovernance.proposalCount());
-      const items = await Promise.all(
-        Array.from({ length: count }, async (_, id) => {
-          const [raw, state] = await Promise.all([
-            readGovernance.getProposal(id),
-            readGovernance.state(id),
-          ]);
-          return normalizeProposal(raw, state);
-        })
-      );
+      const items = await withRetry(async () => {
+        const count = Number(await readGovernance.proposalCount());
+        return mapWithConcurrency(
+          Array.from({ length: count }, (_, id) => id),
+          RPC_CONCURRENCY,
+          async (id) => {
+            const [raw, state] = await Promise.all([
+              readGovernance.getProposal(id),
+              readGovernance.state(id),
+            ]);
+            return normalizeProposal(raw, state);
+          }
+        );
+      });
       setProposals(items.reverse());
     } finally {
       setLoadingProposals(false);
@@ -228,20 +307,22 @@ export function GovernanceProvider({ children }) {
 
   const refreshBalance = useCallback(async () => {
     if (!IS_CONFIGURED) return;
-    const supply = await readGovToken.totalSupply();
-    setTotalSupply(Number(formatEther(supply)));
+    await withRetry(async () => {
+      const supply = await readGovToken.totalSupply();
+      setTotalSupply(Number(formatEther(supply)));
 
-    if (!address) {
-      setTokenBalance(0);
-      setHasClaimed(false);
-      return;
-    }
-    const [balance, claimed] = await Promise.all([
-      readGovToken.balanceOf(address),
-      readGovToken.hasClaimed(address),
-    ]);
-    setTokenBalance(Number(formatEther(balance)));
-    setHasClaimed(claimed);
+      if (!address) {
+        setTokenBalance(0);
+        setHasClaimed(false);
+        return;
+      }
+      const [balance, claimed] = await Promise.all([
+        readGovToken.balanceOf(address),
+        readGovToken.hasClaimed(address),
+      ]);
+      setTokenBalance(Number(formatEther(balance)));
+      setHasClaimed(claimed);
+    });
   }, [address, readGovToken]);
 
   const refreshMyVotes = useCallback(
@@ -250,22 +331,27 @@ export function GovernanceProvider({ children }) {
         setMyVotes({});
         return;
       }
-      const entries = await Promise.all(
-        proposalList.map(async (p) => [p.id, Number(await readGovernance.votesCast(p.id, address))])
-      );
-      setMyVotes(Object.fromEntries(entries));
+      await withRetry(async () => {
+        const entries = await mapWithConcurrency(proposalList, RPC_CONCURRENCY, async (p) => [
+          p.id,
+          Number(await readGovernance.votesCast(p.id, address)),
+        ]);
+        setMyVotes(Object.fromEntries(entries));
+      });
     },
     [address, readGovernance]
   );
 
   const refreshTokenomics = useCallback(async () => {
     if (!IS_CONFIGURED) return;
-    const [price, treasuryWei] = await Promise.all([
-      readGovToken.tokenPrice(),
-      readProvider.getBalance(GOV_TOKEN_ADDRESS),
-    ]);
-    setTokenPriceValue(price);
-    setEthTreasuryBalance(Number(formatEther(treasuryWei)));
+    await withRetry(async () => {
+      const [price, treasuryWei] = await Promise.all([
+        readGovToken.tokenPrice(),
+        readProvider.getBalance(GOV_TOKEN_ADDRESS),
+      ]);
+      setTokenPriceValue(price);
+      setEthTreasuryBalance(Number(formatEther(treasuryWei)));
+    });
   }, [readGovToken]);
 
   useEffect(() => {
@@ -311,7 +397,7 @@ export function GovernanceProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    refreshMyVotes(proposals);
+    refreshMyVotes(proposals).catch((err) => console.error("[BlockVote] refreshMyVotes failed:", err));
   }, [proposals, refreshMyVotes]);
 
   useEffect(() => {
@@ -354,7 +440,7 @@ export function GovernanceProvider({ children }) {
     (async () => {
       const myEvents = allVoteEvents.filter((e) => e.args.voter.toLowerCase() === address.toLowerCase());
       if (myEvents.length === 0) return;
-      const blocks = await Promise.all(myEvents.map((e) => getBlockCached(e.blockNumber)));
+      const blocks = await mapWithConcurrency(myEvents, RPC_CONCURRENCY, (e) => getBlockCached(e.blockNumber));
       if (cancelled) return;
 
       setMyVotingHistory((prev) => {
@@ -429,21 +515,25 @@ export function GovernanceProvider({ children }) {
       const fromBlock = await blockNumberBeforeCached(earliestStart, latestBlock);
       const toBlock = latestBlock;
 
-      const [voteEvents, updateEvents, endEvents, cancelEvents] = await Promise.all([
-        queryFilterChunked(readGovernance, readGovernance.filters.VoteCast(), fromBlock, toBlock),
-        queryFilterChunked(readGovernance, readGovernance.filters.ProposalUpdated(), fromBlock, toBlock),
-        queryFilterChunked(readGovernance, readGovernance.filters.ProposalEnded(), fromBlock, toBlock),
-        queryFilterChunked(readGovernance, readGovernance.filters.ProposalCancelled(), fromBlock, toBlock),
-      ]);
+      const [voteEvents, updateEvents, endEvents, cancelEvents] = await mapWithConcurrency(
+        [
+          readGovernance.filters.VoteCast(),
+          readGovernance.filters.ProposalUpdated(),
+          readGovernance.filters.ProposalEnded(),
+          readGovernance.filters.ProposalCancelled(),
+        ],
+        RPC_CONCURRENCY,
+        (filter) => queryFilterChunked(readGovernance, filter, fromBlock, toBlock)
+      );
       if (cancelled) return;
 
       setAllVoteEvents(voteEvents);
 
       const [voteBlocks, updateBlocks, endBlocks, cancelBlocks] = await Promise.all([
-        Promise.all(voteEvents.map((e) => getBlockCached(e.blockNumber))),
-        Promise.all(updateEvents.map((e) => getBlockCached(e.blockNumber))),
-        Promise.all(endEvents.map((e) => getBlockCached(e.blockNumber))),
-        Promise.all(cancelEvents.map((e) => getBlockCached(e.blockNumber))),
+        mapWithConcurrency(voteEvents, RPC_CONCURRENCY, (e) => getBlockCached(e.blockNumber)),
+        mapWithConcurrency(updateEvents, RPC_CONCURRENCY, (e) => getBlockCached(e.blockNumber)),
+        mapWithConcurrency(endEvents, RPC_CONCURRENCY, (e) => getBlockCached(e.blockNumber)),
+        mapWithConcurrency(cancelEvents, RPC_CONCURRENCY, (e) => getBlockCached(e.blockNumber)),
       ]);
       if (cancelled) return;
 
@@ -510,12 +600,14 @@ export function GovernanceProvider({ children }) {
       }
       setTotalVoters(byVoter.size);
 
-      const entries = await Promise.all(
-        Array.from(byVoter.entries()).map(async ([voter, votes]) => ({
+      const entries = await mapWithConcurrency(
+        Array.from(byVoter.entries()),
+        RPC_CONCURRENCY,
+        async ([voter, votes]) => ({
           address: voter,
           votes,
           power: Number(formatEther(await readGovToken.balanceOf(voter))),
-        }))
+        })
       );
       entries.sort((a, b) => b.votes - a.votes || b.power - a.power);
       if (!cancelled) {
@@ -559,9 +651,19 @@ export function GovernanceProvider({ children }) {
         return;
       }
       const latestBlock = await getLatestBlockCached();
-      const [purchaseEvents, mintEvents, initialSupply] = await Promise.all([
-        queryFilterChunked(readGovToken, readGovToken.filters.TokensPurchased(), 0, latestBlock),
-        queryFilterChunked(readGovToken, readGovToken.filters.Transfer(ZeroAddress), 0, latestBlock),
+      // Scan from the contract's own deployment block (derived from
+      // addresses.json's deployedAt, already generated by deploy.js) instead
+      // of genesis — nothing this contract emits can predate its own
+      // deployment, so this loses zero real events while skipping millions
+      // of empty blocks that previously had to be chunked/retried through
+      // on every mount.
+      const fromBlock = await blockNumberBeforeCached(DEPLOYED_AT, latestBlock);
+      const [[purchaseEvents, mintEvents], initialSupply] = await Promise.all([
+        mapWithConcurrency(
+          [readGovToken.filters.TokensPurchased(), readGovToken.filters.Transfer(ZeroAddress)],
+          RPC_CONCURRENCY,
+          (filter) => queryFilterChunked(readGovToken, filter, fromBlock, latestBlock)
+        ),
         readGovToken.INITIAL_SUPPLY(),
       ]);
       if (cancelled) return;
@@ -572,8 +674,8 @@ export function GovernanceProvider({ children }) {
       );
 
       const [purchaseBlocks, claimBlocks] = await Promise.all([
-        Promise.all(purchaseEvents.map((e) => getBlockCached(e.blockNumber))),
-        Promise.all(claimEvents.map((e) => getBlockCached(e.blockNumber))),
+        mapWithConcurrency(purchaseEvents, RPC_CONCURRENCY, (e) => getBlockCached(e.blockNumber)),
+        mapWithConcurrency(claimEvents, RPC_CONCURRENCY, (e) => getBlockCached(e.blockNumber)),
       ]);
       if (cancelled) return;
 
@@ -889,11 +991,15 @@ export function GovernanceProvider({ children }) {
   const getCreationTxHash = useCallback(
     async (id) => {
       const proposal = proposals.find((p) => p.id === id);
+      // No proposal to anchor a block range to — never scan from genesis to
+      // find it; the caller already handles a null result the same as "not
+      // found yet".
+      if (!proposal) return null;
       const latestBlock = await getLatestBlockCached();
       // ProposalCreated fires in the same block as startTime is recorded, so
       // this only needs a tiny window around that instant — not the whole
       // history up to latestBlock.
-      const fromBlock = proposal ? await blockNumberBeforeCached(proposal.startTime, latestBlock) : 0;
+      const fromBlock = await blockNumberBeforeCached(proposal.startTime, latestBlock);
       const toBlock = Math.min(fromBlock + 2, latestBlock);
       const events = await queryFilterChunked(
         readGovernance,
