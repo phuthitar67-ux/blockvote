@@ -14,7 +14,6 @@ import {
   Ban,
   Users,
   ArrowRight,
-  Pencil,
   CheckCircle2,
   Tag,
   Wallet,
@@ -35,8 +34,8 @@ import {
 import AmbientBackground from "@/app/components/AmbientBackground";
 import { useWallet } from "@/lib/WalletContext";
 import { useGovernance } from "@/lib/GovernanceContext";
-import { getYesPercent, getVoteTotal, formatCompact } from "@/lib/web3/format";
-import { statusLabels } from "@/lib/uiConstants";
+import { getYesPercent, getVoteTotal, formatCompact, formatActivityTime } from "@/lib/web3/format";
+import { statusLabels, getActivityMeta } from "@/lib/uiConstants";
 
 function shortenAddress(addr) {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
@@ -70,14 +69,6 @@ const STATUS_CHART_COLORS = {
   "ยกเลิกแล้ว": "#94a3b8",
 };
 
-const ACTIVITY_META = {
-  created: { label: "สร้างข้อเสนอ", icon: PlusCircle, color: "text-blue-400" },
-  vote: { label: "โหวต", icon: Vote, color: "text-emerald-400" },
-  edit: { label: "แก้ไขข้อเสนอ", icon: Pencil, color: "text-violet-400" },
-  end: { label: "ปิดโหวต", icon: StopCircle, color: "text-amber-400" },
-  cancel: { label: "ยกเลิกข้อเสนอ", icon: Ban, color: "text-red-400" },
-};
-
 export default function DashboardPage() {
   const { address } = useWallet();
   const {
@@ -87,6 +78,7 @@ export default function DashboardPage() {
     myVotingHistory,
     myCreatedProposals,
     recentActivity,
+    activityFeed,
     platformStats,
     totalSupply,
     tokenPriceEth,
@@ -138,6 +130,14 @@ export default function DashboardPage() {
       .slice(0, 5)
       .map((p) => ({ name: `#${p.id}`, title: p.title, votes: getVoteTotal(p) }));
   }, [proposals]);
+
+  // "My Activity" — the same system-wide activityFeed, filtered down to
+  // only this connected wallet's own actions. Never shows another wallet's
+  // history, and shows nothing at all when no wallet is connected.
+  const myActivity = useMemo(() => {
+    if (!address) return [];
+    return activityFeed.filter((a) => a.actor?.toLowerCase() === address.toLowerCase()).slice(0, 10);
+  }, [activityFeed, address]);
 
   const dashboardStats = useMemo(
     () => [
@@ -404,40 +404,49 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Recent Activity */}
+        {/* My Activity */}
         <div className="fade-up mt-10 overflow-hidden rounded-[32px] border border-white/10 bg-[#111725]">
           <div className="p-6 pb-4">
-            <h2 className="text-base font-semibold text-white">กิจกรรมล่าสุด</h2>
+            <h2 className="text-base font-semibold text-white">กิจกรรมของฉัน</h2>
           </div>
-          {recentActivity.length === 0 ? (
-            <PanelEmptyState text="ยังไม่มีความเคลื่อนไหวในระบบ" />
+          {myActivity.length === 0 ? (
+            <PanelEmptyState
+              text={address ? "ยังไม่มีความเคลื่อนไหวของคุณในระบบ" : "เชื่อมต่อกระเป๋าเพื่อดูความเคลื่อนไหวของคุณ"}
+            />
           ) : (
             <div className="divide-y divide-white/5">
-              {recentActivity.map((activity) => {
-                const meta = ACTIVITY_META[activity.type];
+              {myActivity.map((activity) => {
+                const meta = getActivityMeta(activity);
                 const Icon = meta.icon;
-                return (
-                  <Link
-                    key={activity.id}
-                    href={`/proposal/${activity.proposalId}`}
-                    className="flex items-center gap-3 px-6 py-3.5 transition-colors hover:bg-white/[0.02]"
-                  >
+                const row = (
+                  <div className="flex items-center gap-3 px-6 py-3.5">
                     <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/5 ${meta.color}`}>
                       <Icon size={14} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs text-slate-300">
                         <span className={`font-medium ${meta.color}`}>{meta.label}</span>
-                        {activity.detail ? ` (${activity.detail})` : ""} — {activity.proposalTitle}
+                        {activity.proposalTitle ? ` — ${activity.proposalTitle}` : ""}
                       </p>
                       <p className="mt-0.5 font-mono text-[11px] text-slate-500">
                         {shortenAddress(activity.actor)}
                       </p>
                     </div>
                     <span className="shrink-0 text-[11px] text-slate-500">
-                      {new Date(activity.timestamp * 1000).toLocaleDateString()}
+                      {formatActivityTime(activity.timestamp)}
                     </span>
+                  </div>
+                );
+                return activity.proposalId != null ? (
+                  <Link
+                    key={activity.id}
+                    href={`/proposal/${activity.proposalId}`}
+                    className="block transition-colors hover:bg-white/[0.02]"
+                  >
+                    {row}
                   </Link>
+                ) : (
+                  <div key={activity.id}>{row}</div>
                 );
               })}
             </div>

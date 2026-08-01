@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   PieChart,
   Pie,
@@ -17,8 +18,8 @@ import { Trophy, CheckCircle2, XCircle, Clock3, StopCircle, Ban, ShieldCheck, Ha
 import AmbientBackground from "@/app/components/AmbientBackground";
 import PageHeader from "@/app/components/PageHeader";
 import { useGovernance } from "@/lib/GovernanceContext";
-import { getVoteTotal, getYesPercent, groupByCategory, monthlyOutcomesFrom } from "@/lib/web3/format";
-import { categoryColors, statusLabels } from "@/lib/uiConstants";
+import { getVoteTotal, getYesPercent, groupByCategory, monthlyOutcomesFrom, formatActivityTime } from "@/lib/web3/format";
+import { categoryColors, statusLabels, getActivityMeta } from "@/lib/uiConstants";
 
 // Display-only Thai labels for the on-chain category values (same mapping
 // used on Create Proposal and Proposals Explorer). entry.name / item.category
@@ -53,7 +54,11 @@ const statusIcon = {
 };
 
 export default function ResultsPage() {
-  const { proposals, platformStats, topVoters, getCreationTxHash } = useGovernance();
+  const { proposals, platformStats, topVoters, getCreationTxHash, activityFeed } = useGovernance();
+
+  // Public, system-wide feed — every wallet's activity, newest first.
+  // activityFeed is already sorted that way by GovernanceContext.
+  const systemActivity = activityFeed.slice(0, 15);
 
   const mostVoted =
     proposals.length > 0
@@ -113,6 +118,56 @@ export default function ResultsPage() {
               <p className="stat-tile-value">{platformStats.totalVoters.toLocaleString()}</p>
               <p className="stat-tile-label">ผู้โหวตทั้งหมด</p>
             </div>
+          </div>
+
+          {/* System Activity */}
+          <div className="fade-up mt-8 overflow-hidden rounded-[32px] border border-white/10 bg-[#111725]">
+            <div className="p-8 pb-4">
+              <h2 className="text-lg font-semibold text-white">กิจกรรมล่าสุดของระบบ</h2>
+              <p className="mt-1 text-xs text-slate-400">ความเคลื่อนไหวล่าสุดจากทุกกระเป๋าในระบบ</p>
+            </div>
+            {systemActivity.length === 0 ? (
+              <div className="empty-state">
+                <span className="empty-state-icon">
+                  <Inbox size={18} />
+                </span>
+                <p className="empty-state-desc">ยังไม่มีความเคลื่อนไหวในระบบ</p>
+              </div>
+            ) : (
+              <ol className="mx-8 mb-8 mt-2 border-l border-white/10 pl-6">
+                {systemActivity.map((activity) => {
+                  const meta = getActivityMeta(activity);
+                  const Icon = meta.icon;
+                  return (
+                    <li key={activity.id} className="relative pb-6 last:pb-0">
+                      <span
+                        className={`absolute -left-[31px] flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-[#111725] ${meta.color}`}
+                      >
+                        <Icon size={12} />
+                      </span>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                        <span className="text-slate-500">{formatActivityTime(activity.timestamp)}</span>
+                        <span className="font-mono text-blue-400">{shortenAddress(activity.actor)}</span>
+                      </div>
+                      <p className="mt-1 text-sm text-slate-200">
+                        <span className={`font-medium ${meta.color}`}>{meta.label}</span>
+                        {activity.proposalTitle && (
+                          <>
+                            {" "}
+                            <Link
+                              href={`/proposal/${activity.proposalId}`}
+                              className="text-slate-400 underline decoration-white/20 underline-offset-2 transition-colors hover:text-white"
+                            >
+                              &ldquo;{activity.proposalTitle}&rdquo;
+                            </Link>
+                          </>
+                        )}
+                      </p>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
           </div>
 
           {/* Charts */}
